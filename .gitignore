@@ -1,0 +1,49 @@
+# Local PDF-authoring dependencies and visual verification files
+.codex_deps/
+tmp/
+__pycache__/
+
+# Never commit local secrets
+.env
+.env.*
+!.env.example
+
+# Python environments and generated caches
+.venv/
+venv/
+env/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Local experiments and generated artifacts; use DVC/MLflow storage
+/mlruns/
+/mlartifacts/
+/mlflow.db
+/mlflow.db-*
+/data/raw/
+/data/processed/
+/models/
+/artifacts/
+/logs/
+*.log
+
+# Local credentials and infrastructure state
+.aws/
+*.pem
+*.key
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+
+# Editor and operating-system files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
