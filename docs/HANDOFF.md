@@ -15,8 +15,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | ID | Item | Status | Notes |
 |---|---|---|---|
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
-| M1.1 | Data feasibility and site choice | In progress | Completed audit of candidate systems 2107, 2105, 9068 on OEDI and NASA POWER API; docs/data_card.md complete; recommend System 2107; awaiting user sign-off |
-| M1.2 | Validation + hourly dataset | Not started | |
+| M1.1 | Data feasibility and site choice | Done (tests pass) | Site 2107 approved by human owner. Deep verification audit completed in docs/data_card.md. |
+| M1.2 | Validation + hourly dataset | In progress | configs/data.yaml and src/data/ingestion.py implemented; manifest.json generated; validation & aggregation next |
 | M1.3 | Features + Feast (offline/online) | Not started | |
 | M1.4 | Baselines, Ridge, HistGB, tuning | Not started | |
 | M1.5 | MLflow lineage, evaluation.json, model bundle | Not started | |
@@ -68,7 +68,7 @@ The spec rewards the process (gates, blocked promotion), not high accuracy.
 ## 5. Contracts I own (fill in when built; link the file)
 | Contract | File | Status |
 |---|---|---|
-| Hourly data schema + manifest | `configs/data.yaml`, `data/processed/manifest.json` | TBD |
+| Hourly data schema + manifest | `configs/data.yaml`, `data/raw/manifest.json` | In progress (raw manifest generated) |
 | Feature schema (ordered names/types/units) | `configs/feature_schema.json` | TBD |
 | Model bundle format | `src/models/bundle.py`, `docs/handoff_member3.md` | TBD |
 | Evaluation result | `evaluation.json` (baseline vs champion, thresholds, eligible flag, reasons) | TBD |
@@ -84,6 +84,10 @@ py -3.11 -m venv .venv
 
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
+# Run data ingestion pipeline (PVDAQ registration & NASA POWER weather fetch)
+python -m src.data.ingestion --config configs/data.yaml
+# (or directly: .\.venv\Scripts\python -m src.data.ingestion --config configs/data.yaml)
 
 # Run test suite
 pytest
@@ -108,7 +112,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - [ ] Request/response schema and feature retrieval mode for the API (Member 3)
 - [ ] Model bundle format Member 3 needs (joblib vs MLflow pyfunc)
 - [ ] Final deadline date, machine specs, AWS budget (all)
-- [ ] Site/dataset sign-off by all three after M1.1
+- [x] Site/dataset sign-off by all three after M1.1 (Approved: System 2107 Farm Solar Array, Arbuckle, CA)
 
 ## 9. Risks / known issues
 - Data access and size (prize datasets can be tens of GB): sample first, then scale.
@@ -124,13 +128,15 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-15 | Member 1 scaffold & directory layout | Created Member 1 package structure on branch m1/scaffold with empty __init__.py files, .gitkeep in empty folders, ruff config (line-length 100), .env.example, and test_smoke.py |
 | 2026-11-15 | Pinned stack in requirements.txt | Pinned 16 core Member 1 packages for Python 3.11 (pandas 2.2.2, numpy 1.26.4, scikit-learn 1.5.2, scipy 1.13.1, mlflow 2.17.2, pvlib 0.11.1, pandera 0.20.4, etc.), excluding feast/airflow/kubeflow/bentoml to avoid early dependency conflicts |
 | 2026-11-16 | Recommend System 2107 (Farm Solar Array, Arbuckle, CA) for production | Clean revenue meter (instantaneous kW, 6.32 MB, 0.13% missingness over 7 years), fixed 25° ground mount (no tracker/multi-roof complications), left-aligned, verified against NASA POWER hourly UTC weather |
+| 2026-11-16 | System 2107 approved as project PV site | Approved by human owner. Detailed verification confirmed local civil time with DST (America/Los_Angeles), 15-minute left-aligned average active power (kW), 893 kW DC capacity / 662.4 kW nominal AC capacity |
 
 ## 11. Changelog
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 - 2026-11-15 (P1 - Scaffolding): Completed Member 1 package scaffold on branch m1/scaffold: created package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
 - 2026-11-15 (P2 - Environment & Requirements): Added pinned requirements.txt (16 packages for Python 3.11). Created .venv, installed requirements, verified pytest (4 passed) and ruff check . (clean). Fixed import sorting in tests/test_smoke.py and updated run instructions in docs/HANDOFF.md.
 - 2026-11-16 (M1.1 - Data Feasibility): Completed feasibility audit of PVDAQ prize systems 2107, 2105, 9068 on OEDI S3 bucket and NASA POWER Hourly API. Created docs/data_card.md with full comparison matrix, DST analysis, parameter verification, and recommendation for System 2107. Downloaded metadata and small sample (~6.3 MB meter data, well under 500 MB budget) in data/raw/. Committed on branch m1/data-feasibility.
+- 2026-11-16 (M1.1 Approved & Ingestion Implemented): System 2107 approved. Completed deep verification audit in docs/data_card.md (DST 75-min spring skip explanation, solar-noon alignment test proving America/Los_Angeles timezone, AC statistics and capacity normalization rationale, aggregation type 'avg'). Archived one-off scripts to scripts/exploration/. Created configs/data.yaml and src/data/ingestion.py with retry/backoff, idempotent download check, and manifest generator. Fetched complete 2017–2023 NASA POWER hourly weather and generated data/raw/manifest.json. Added tests/test_ingestion.py (11 tests pass, ruff clean). Committed on branch m1/data-ingestion.
 
 ## 12. Next steps
-1. Await user / team sign-off for System 2107 (Farm Solar Array, Arbuckle, CA).
-2. Run M1.2: Build data validation and hourly aggregation pipeline (`src/data/ingestion.py`, `src/data/validation.py`, `src/data/aggregation.py`) to create canonical UTC hourly dataset `data/processed/hourly_energy.parquet`.
+1. Build `src/data/validation.py` for M1.2: validate raw generation and weather against schema, check timestamp continuity, flag duplicates, out-of-bounds power/weather, and generate quarantine report.
+2. Build `src/data/aggregation.py` for M1.2: convert local 15-min average kW to hourly energy in kWh ($E = \sum P \times 0.25$), align with UTC hourly weather, and produce canonical `data/processed/hourly_energy.parquet`.
