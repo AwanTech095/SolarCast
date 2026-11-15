@@ -66,3 +66,47 @@ The primary objective is to select **one** PV site satisfying all MLOps course r
   - `2107_electrical_data.csv`: 438.57 MB (inverter-level 5-minute data).
   - Total 2107 directory on S3: 14 files, ~1.09 GB.
 - **Licence & Terms:** US Department of Energy (DOE) Solar Data Prize 2023 / NREL OEDI open data. Publicly available with required citation: DOI `10.25984/1846021`.
+
+---
+
+## 3. Candidate 2: System 2105 — Maui Ocean Center (Maui, HI)
+
+### 3.1 System Specifications & Metadata
+- **System ID:** `2105` (Public Name: `Maui Ocean Center`, Site ID: `7209`, Site Public Name: `MUFFC_1`)
+- **Location:** Maui, Hawaii, United States (`Pacific` region)
+- **Coordinates:** Latitude `20.884134° N`, Longitude `-156.340543° W`, Elevation `10.0 m`
+- **Climate Type:** Köppen `Af` (Tropical rainforest / maritime)
+- **Nameplate Capacity:** `110.0 kW DC` (commercial rooftop)
+- **Mount & Tracking:** Commercial rooftop (`moc_mount`), Tracking: `False`, Azimuth: `varies`, Tilt: `varies` (panels face multiple orientations across building roof faces).
+- **Meters & Inverters:**
+  - Meter: Metadata registers metric `meter_ac_output_(kwatts)_meter_150161` (`kW`), but no dedicated site-level meter CSV exists in the data directory.
+  - Inverters: Split across 11 individual inverter CSV files (`2105_inv01_data.csv` to `2105_inv11_data.csv`), each tracking strings `inv_string01` .. `inv_string11`.
+
+### 3.2 Channels & Measurement Units
+- **Primary AC Channels:** `inv_stringXX_ac_output_(kwh)_inv_YYYYYY` across 11 inverter CSV files.
+  - Common Name: `AC energy`
+  - Engineering Units: `kWh` (cumulative active energy meter reading)
+  - Scale Factor: `None` (1.0), Offset: `None` (0.0)
+  - Energy Conversion: Requires cumulative meter differencing ($\Delta E = E_t - E_{t-1}$) with meter reset and counter rollover detection, evaluated across 11 unsynchronized series and summed to site level.
+- **Secondary Channels:** AC voltage (`V`), DC voltage (`V`), inverter temperature (`°C`), power factor, and two environmental sensors (`2105_environment_1_data.csv` and `2105_environment_2_data.csv` recording ambient temperature in `°C`).
+
+### 3.3 Temporal Structure & Timestamp Behavior
+- **Sampling Resolution:** Stated as `5-15 min`, but empirical records show uneven event-driven reporting.
+- **Interval Alignment:** Unspecified in metadata (`Meters: {}`, `Inverters: {}`, metric `time_interval = None`).
+- **Timezone & Daylight Saving Time (DST):**
+  - Metadata specifies `timezone_code: 10` (Hawaii Standard Time, HST, UTC-10).
+  - Hawaii **does not observe Daylight Saving Time**.
+  - Timestamps in `measured_on` are constant standard local civil time (UTC-10) without seasonal clock shifts. Offset to UTC is a fixed $+10$ hours year-round.
+
+### 3.4 Data Coverage, Quality & Gaps
+- **Date Range:** `2018-12-15 00:15:00` to `2023-11-15 12:21:50` (4.92 years).
+- **Completeness & Gaps:**
+  - Moderate to high missingness. Nighttime non-producing records are frequently dropped rather than reported as zeros, leading to irregular multi-hour steps between consecutive timestamps.
+  - Inverter file timestamps are not strictly locked to a uniform 15-minute grid.
+- **Physical Validity & Geometry:**
+  - Complex multi-plane geometry (varying azimuth and tilt angles) causes inter-row and building shading that violates simple single-diode or fixed clear-sky assumptions.
+
+### 3.5 Storage Footprint & Access
+- **S3 Location:** `s3://oedi-data-lake/pvdaq/2023-solar-data-prize/2105_OEDI/` (anonymous S3 access).
+- **Files & Sizes:** 16 files totaling **207.75 MB** on S3.
+- **Licence & Terms:** DOE Solar Data Prize 2023 / NREL OEDI open data (DOI `10.25984/1846021`).
