@@ -15,7 +15,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | ID | Item | Status | Notes |
 |---|---|---|---|
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
-| M1.1 | Data feasibility and site choice | Not started | Candidates in section 3 |
+| M1.1 | Data feasibility and site choice | In progress | Completed audit of candidate systems 2107, 2105, 9068 on OEDI and NASA POWER API; docs/data_card.md complete; recommend System 2107; awaiting user sign-off |
 | M1.2 | Validation + hourly dataset | Not started | |
 | M1.3 | Features + Feast (offline/online) | Not started | |
 | M1.4 | Baselines, Ridge, HistGB, tuning | Not started | |
@@ -25,35 +25,27 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 
 Status values: Not started / In progress / Done (tests pass) / Blocked (say why).
 
-## 3. Data sources (proposed; final site NOT yet chosen)
-Sources read on 2026-11-13. Nothing has been downloaded or validated yet.
+## 3. Data sources (audited in M1.1; see docs/data_card.md for full report)
+Audited on 2026-11-16 via anonymous S3 access to `s3://oedi-data-lake/` and NASA POWER API. Recommendation: **System 2107**.
 
 **Target (measured production): NLR/NREL PVDAQ via OEDI data lake.**
-- Docs: https://github.com/openEDI/documentation/blob/main/pvdaq.md. DOI 10.25984/1846021 (cite it).
-- Parquet on S3: `s3://oedi-data-lake/pvdaq/` (tables: system, site, metrics, meters, inverters, mount...) and
-  `s3://oedi-data-lake/pvdata/system_id=/year=/month=/day=/*.parquet` for the time series.
-- Typical resolution is 15 minutes, but it varies by system. Schema may change across years.
-- Key tables: `pvdaq_system` (power = DC nameplate kW), `pvdaq_site` (latitude, longitude, elevation),
-  `pvdaq_metrics` (units, scale/offset, `common_name` such as "AC energy"), `pvdaq_meters`/`pvdaq_inverters`
-  (`time_interval` = left/center/right alignment), `pvdaq_pvdata` (`measured_on` local, `utc_measured_on`, `metric_id`, `value`).
-- The `utc_measured_on` field "could include DST" per the docs, so verify it against the local timestamp.
-- Old PVDAQ V3 API is **decommissioned** (https://developer.nlr.gov/docs/solar/). Bulk download tool: PVDAQ Access
-  (https://github.com/NatLabRockies/pvdaq_access). Data map: https://openei.org/wiki/PVDAQ/PVData_Map
-- Prize datasets (5+ years, at least 15-min), stored differently (one directory per site, may be split by channel, some tens of GB):
-  - **2107**: 893 kW fixed ground-mount, California. **First candidate.**
-  - **2105**: 237 kW rooftop, several orientations, Hawaii. Backup (mixed orientations make it messier).
-  - **9068**: 4.7 MW single-axis tracker, Colorado. Backup.
-  - 7333 (257 MW, 10 s data) and 9069 (38.7 MW) are too large; avoid.
-- Open checks before accepting a site: AC energy/power channel exists, units, interval alignment, timezone, coverage and
-  gaps, licence, whether the S3 bucket needs no credentials.
+- Citation / DOI: 10.25984/1846021 (DOE Solar Data Prize 2023 / NREL).
+- Anonymous S3 access: `s3://oedi-data-lake/pvdaq/2023-solar-data-prize/{site}_OEDI/`.
+- Audited candidates:
+  - **2107 (Recommended):** 893 kW DC fixed ground-mount, Arbuckle, CA ($38.9963^\circ\text{N}, -122.1341^\circ\text{W}$, 10 m elev). Dedicated revenue meter `2107_meter_15m_data.csv` (6.32 MB), 15-min instantaneous kW, left-aligned (`time_interval = 'L'`), 0.13% missingness over 7 years (2017–2023). Timestamps in local civil time (`PST8PDT`) with DST spring skip (must localize to `America/Los_Angeles` before UTC conversion).
+  - **2105 (Backup):** 110 kW DC rooftop, Maui, HI. No single meter file; split across 11 inverter CSVs reporting cumulative kWh (requires differencing + reset handling). Mixed tilts/azimuths across roof planes. HST (UTC-10, no DST).
+  - **9068 (Backup):** 4.74 MW DC single-axis tracker, Kersey, CO (1407 m elev). Single-axis tracker with 285 tracker angles. Inverter clipping near 3.82 MW AC limit. Massive dataset (2.0 GB across 15 files).
+- Note: The regular `pvdaq/parquet/` metadata tables contain standard systems, while prize datasets reside under `pvdaq/2023-solar-data-prize/`. Old PVDAQ V3 API is decommissioned.
 
 **Weather: NASA POWER hourly API.**
-- API: `/api/temporal/hourly/point` at https://power.larc.nasa.gov/ (docs: https://power.larc.nasa.gov/docs/services/api/temporal/hourly/).
-- **Default time standard is Local Solar Time. Always pass `time-standard=UTC`.** Hourly data from 2001 to near real time.
-- Max 15 parameters per request. Candidate fields: `ALLSKY_SFC_SW_DWN`, `T2M`, `RH2M`, `WS10M` (verify availability and units).
-- Registry page: https://registry.opendata.aws/nasa-power/. Licence: no restrictions, **cite NASA POWER**. It is CC BY 4.0.
-  Update lag: meteorological ~2-3 days, solar ~5-7 days. So it is an archive of observations, **not a next-hour forecast**.
-  The plan's simulated 14-day lag is conservative. Run 7/14/30-day sensitivity.
+- API: `/api/temporal/hourly/point` at https://power.larc.nasa.gov/ (tested and verified with `time-standard=UTC`).
+- Confirmed parameters & units for 2107 coordinates:
+  - `ALLSKY_SFC_SW_DWN`: All Sky Surface Shortwave Downward Irradiance (`Wh/m^2`, hourly insolation)
+  - `T2M`: Temperature at 2 Meters (`C`)
+  - `RH2M`: Relative Humidity at 2 Meters (`%`)
+  - `WS10M`: Wind Speed at 10 Meters (`m/s`)
+- Licence: CC BY 4.0 (cite NASA POWER).
+- Operational lag: 5–7 days for solar irradiance. Simulated production lag policy: 14 days for mode F1. Observed weather used in mode E1 for delayed deviation analysis.
 
 **Fallback if no usable measured site is found:** another public measured-generation source with known coordinates and terms.
 Synthetic data is allowed only as a clearly labeled pipeline-demo fallback.
@@ -131,11 +123,14 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | First candidate system 2107; backups 2105, 9068 | Mid-size fixed system with long history; not yet validated |
 | 2026-11-15 | Member 1 scaffold & directory layout | Created Member 1 package structure on branch m1/scaffold with empty __init__.py files, .gitkeep in empty folders, ruff config (line-length 100), .env.example, and test_smoke.py |
 | 2026-11-15 | Pinned stack in requirements.txt | Pinned 16 core Member 1 packages for Python 3.11 (pandas 2.2.2, numpy 1.26.4, scikit-learn 1.5.2, scipy 1.13.1, mlflow 2.17.2, pvlib 0.11.1, pandera 0.20.4, etc.), excluding feast/airflow/kubeflow/bentoml to avoid early dependency conflicts |
+| 2026-11-16 | Recommend System 2107 (Farm Solar Array, Arbuckle, CA) for production | Clean revenue meter (instantaneous kW, 6.32 MB, 0.13% missingness over 7 years), fixed 25° ground mount (no tracker/multi-roof complications), left-aligned, verified against NASA POWER hourly UTC weather |
 
 ## 11. Changelog
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 - 2026-11-15 (P1 - Scaffolding): Completed Member 1 package scaffold on branch m1/scaffold: created package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
 - 2026-11-15 (P2 - Environment & Requirements): Added pinned requirements.txt (16 packages for Python 3.11). Created .venv, installed requirements, verified pytest (4 passed) and ruff check . (clean). Fixed import sorting in tests/test_smoke.py and updated run instructions in docs/HANDOFF.md.
+- 2026-11-16 (M1.1 - Data Feasibility): Completed feasibility audit of PVDAQ prize systems 2107, 2105, 9068 on OEDI S3 bucket and NASA POWER Hourly API. Created docs/data_card.md with full comparison matrix, DST analysis, parameter verification, and recommendation for System 2107. Downloaded metadata and small sample (~6.3 MB meter data, well under 500 MB budget) in data/raw/. Committed on branch m1/data-feasibility.
 
 ## 12. Next steps
-1. Run M1.1: Data feasibility and site choice (PVDAQ candidate system 2107 vs backups 2105, 9068 + NASA POWER hourly API) and stop for site sign-off.
+1. Await user / team sign-off for System 2107 (Farm Solar Array, Arbuckle, CA).
+2. Run M1.2: Build data validation and hourly aggregation pipeline (`src/data/ingestion.py`, `src/data/validation.py`, `src/data/aggregation.py`) to create canonical UTC hourly dataset `data/processed/hourly_energy.parquet`.
