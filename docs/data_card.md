@@ -110,3 +110,51 @@ The primary objective is to select **one** PV site satisfying all MLOps course r
 - **S3 Location:** `s3://oedi-data-lake/pvdaq/2023-solar-data-prize/2105_OEDI/` (anonymous S3 access).
 - **Files & Sizes:** 16 files totaling **207.75 MB** on S3.
 - **Licence & Terms:** DOE Solar Data Prize 2023 / NREL OEDI open data (DOI `10.25984/1846021`).
+
+---
+
+## 4. Candidate 3: System 9068 — SR_CO (Kersey, CO)
+
+### 4.1 System Specifications & Metadata
+- **System ID:** `9068` (Public Name: `SR_CO`, Site ID: `7213`, Site Public Name: `s_SR_CO_1`)
+- **Location:** Kersey, Weld County, Colorado, United States (`West` region)
+- **Coordinates:** Latitude `40.3864° N`, Longitude `-104.5512° W`, Elevation `1407.0 m` (high-altitude continental plains)
+- **Climate Type:** Köppen `Bsk` (Cold semi-arid climate, high elevation)
+- **Nameplate Capacity:** `4,738.0 kW DC` (~4.74 MW utility-scale PV plant)
+- **Mount & Tracking:** Single-axis tracker (`sco_mnt_1`, tracking: `True`, azimuth: `180.0°`, tilt: `0.0°`). Includes 285 individual tracker-angle channels (`tracker_X_tracker_angle_trkr_YYYYYY` in `degree`).
+- **Meters & Inverters:**
+  - Meter: 1 revenue-grade meter (`sco_mtr_1`, ID `3135`, `time_interval = 'L'`).
+  - Inverters: 2 central inverters (`sco_inv_1`, `sco_inv_2`, IDs `29970`, `29971`, each 1,910 kW AC nominal capacity, `time_interval = 'L'`).
+
+### 4.2 Channels & Measurement Units
+- **Primary AC Channels:**
+  - Total site revenue meter: `meter_ac_power_(kw)_meter_150150` in `9068_ac_power_data.csv`.
+  - Common Name: `AC power`
+  - Engineering Units: `kW` (instantaneous active power)
+  - Scale Factor: `None` (1.0), Offset: `None` (0.0)
+  - 3-Phase breakdown: `meter_ac_power_phase_1_(kw)_meter_150151`, `phase_2`, `phase_3` (`kW`).
+  - Inverter-level power: `inverter_1_ac_power_(kw)_inv_150143` (`kW`), `inverter_2_ac_power_(kw)_inv_150144` (`kW`), plus 8 sub-inverter module channels (`kW`).
+- **Secondary Channels:** AC voltage (`V`), AC current (`A`), DC combiner currents/voltages (`9068_dc_combiner_data.csv`), weather station ambient temperature (`°C`), plane-of-array irradiance (`pyranometer_(class_a)_pad_1_poa_irradiance_(w/m2)_o_149723`), and 285 tracker angles.
+
+### 4.3 Temporal Structure & Timestamp Behavior
+- **Sampling Resolution:** 5 minutes (`0.0833 h`).
+- **Interval Alignment:** `time_interval = 'L'` (Left-aligned) confirmed in metadata for both meter and inverters.
+- **Timezone & Daylight Saving Time (DST):**
+  - Metadata specifies `timezone_code: 7` (Mountain Time, MST/MDT, UTC-7 / UTC-6).
+  - Colorado observes Daylight Saving Time.
+  - Timestamps in `measured_on` are in local civil time with DST transitions (clock jump in spring, duplicate hour in fall), requiring explicit conversion to UTC.
+
+### 4.4 Data Coverage, Quality & Gaps
+- **Date Range:** `2017-08-23 17:40:00` to `2023-11-16 13:45:00` (6.24 years).
+- **Quality & Utility Characteristics:**
+  - High seasonal variability with severe snow cover events causing extended zero-production periods despite high global irradiance.
+  - Inverter curtailment and clipping near the 3.82 MW AC inverter limit during peak midday summer hours, introducing nonlinearities not present in unclipped systems.
+  - Sensor dropouts and telemetry gaps across combiner and tracker sub-channels.
+
+### 4.5 Storage Footprint & Access
+- **S3 Location:** `s3://oedi-data-lake/pvdaq/2023-solar-data-prize/9068_OEDI/` (anonymous S3 access).
+- **Files & Sizes:** 15 files totaling **1.995 GB** (~2.0 GB) on S3.
+  - `9068_ac_power_data.csv`: 65.00 MB
+  - `9068_environment_data.csv`: 287.96 MB
+  - Supplemental 2024–2025 files: additional ~150 MB.
+- **Licence & Terms:** DOE Solar Data Prize 2023 / NREL OEDI open data (DOI `10.25984/1846021`).
