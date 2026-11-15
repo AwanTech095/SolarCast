@@ -1,9 +1,9 @@
 """Smoke tests for Member 1 scaffolding, package structure, and configs."""
 
 import importlib
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
 
 # Ensure repository root is in sys.path when run directly or by test runners
 _REPO_ROOT = Path(__file__).resolve().parent.parent

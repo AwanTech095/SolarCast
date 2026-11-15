@@ -14,7 +14,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, and test_smoke.py ready |
+| M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
 | M1.1 | Data feasibility and site choice | Not started | Candidates in section 3 |
 | M1.2 | Validation + hourly dataset | Not started | |
 | M1.3 | Features + Feast (offline/online) | Not started | |
@@ -86,14 +86,20 @@ The spec rewards the process (gates, blocked promotion), not high accuracy.
 ## 6. How to run (fill in as built)
 ```powershell
 # Environment setup (PowerShell on Windows)
-py -3.11 -m venv .venv ; .\.venv\Scripts\Activate.ps1 ; pip install -r requirements.txt
+py -3.11 -m venv .venv
+# Note: If the py launcher reports "No installed Python found!", use the direct Python 3.11 executable:
+# & "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" -m venv .venv
 
-# Run smoke tests
-python tests/test_smoke.py
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
-# With pytest and ruff (once dependencies are installed in .venv)
-pytest tests/
+# Run test suite
+pytest
+# (or directly: .\.venv\Scripts\pytest)
+
+# Code quality and style checks
 ruff check .
+# (or directly: .\.venv\Scripts\ruff check .)
 ```
 
 ## 7. Spec traceability (Member 1)
@@ -124,10 +130,12 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 | 2026-11-13 | First candidate system 2107; backups 2105, 9068 | Mid-size fixed system with long history; not yet validated |
 | 2026-11-15 | Member 1 scaffold & directory layout | Created Member 1 package structure on branch m1/scaffold with empty __init__.py files, .gitkeep in empty folders, ruff config (line-length 100), .env.example, and test_smoke.py |
+| 2026-11-15 | Pinned stack in requirements.txt | Pinned 16 core Member 1 packages for Python 3.11 (pandas 2.2.2, numpy 1.26.4, scikit-learn 1.5.2, scipy 1.13.1, mlflow 2.17.2, pvlib 0.11.1, pandera 0.20.4, etc.), excluding feast/airflow/kubeflow/bentoml to avoid early dependency conflicts |
 
 ## 11. Changelog
 - 2026-11-13: File created. Sources reviewed. No code written yet.
-- 2026-11-15: M1.0 completed. Created Member 1 package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
+- 2026-11-15 (P1 - Scaffolding): Completed Member 1 package scaffold on branch m1/scaffold: created package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
+- 2026-11-15 (P2 - Environment & Requirements): Added pinned requirements.txt (16 packages for Python 3.11). Created .venv, installed requirements, verified pytest (4 passed) and ruff check . (clean). Fixed import sorting in tests/test_smoke.py and updated run instructions in docs/HANDOFF.md.
 
 ## 12. Next steps
 1. Run M1.1: Data feasibility and site choice (PVDAQ candidate system 2107 vs backups 2105, 9068 + NASA POWER hourly API) and stop for site sign-off.
