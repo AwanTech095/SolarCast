@@ -2,7 +2,7 @@
 
 **Package:** Member 1 (Data, Features, Feast, Models, MLflow)  
 **Date:** 2026-11-16  
-**Status:** In Progress (Feasibility audit of candidate PV systems on OEDI / PVDAQ & NASA POWER)  
+**Status:** Feasibility audit completed; recommendation submitted for human sign-off  
 **Branch:** `m1/data-feasibility`  
 
 ---
@@ -14,7 +14,7 @@ Task M1.1 evaluates candidate photovoltaic (PV) generation datasets from the Nat
 The primary objective is to select **one** PV site satisfying all MLOps course requirements:
 - Defensible AC power / energy units without ambiguous scaling.
 - Explicit interval alignment (left/center/right) and known timestamp conventions (UTC vs. local civil time with DST).
-- Overlapping multi-year history (>= 2 years) covering complete seasonal cycles.
+- Overlapping multi-year history ($\ge 2$ years) covering complete seasonal cycles.
 - Low missingness / gap percentage.
 - Transparent licensing allowing educational reuse with citation.
 
@@ -158,3 +158,73 @@ The primary objective is to select **one** PV site satisfying all MLOps course r
   - `9068_environment_data.csv`: 287.96 MB
   - Supplemental 2024–2025 files: additional ~150 MB.
 - **Licence & Terms:** DOE Solar Data Prize 2023 / NREL OEDI open data (DOI `10.25984/1846021`).
+
+---
+
+## 5. NASA POWER Meteorological Source Verification
+
+### 5.1 Verification Test
+To verify weather parameter availability and coordinate alignment for the primary candidate (System 2107 at $38.9963^\circ\text{N}, -122.1341^\circ\text{W}$), a test sample was requested from the NASA POWER Hourly Point API:
+- **API Endpoint:** `https://power.larc.nasa.gov/api/temporal/hourly/point`
+- **Request Parameters:** `latitude=38.9963`, `longitude=-122.1341`, `community=RE`, `parameters=ALLSKY_SFC_SW_DWN,T2M,RH2M,WS10M`, `start=20230101`, `end=20230105`, `format=JSON`, `time-standard=UTC`
+- **Response Cache:** `data/raw/samples/nasa_power_2107_sample.json` (15,220 bytes, 120 hourly intervals)
+
+### 5.2 Confirmed Parameters & Units
+| Parameter Code | NASA Parameter Long Name | Response Units | Modeling Application |
+|---|---|---|---|
+| `ALLSKY_SFC_SW_DWN` | All Sky Surface Shortwave Downward Irradiance | `Wh/m^2` | Primary solar driver (hourly insolation, equivalent to mean hourly flux in $\text{W/m}^2$) |
+| `T2M` | Temperature at 2 Meters | `C` | PV module thermal efficiency losses ($-0.35\%/\text{K}$ to $-0.45\%/\text{K}$) |
+| `RH2M` | Relative Humidity at 2 Meters | `%` | Atmospheric transmission, dew, and cloud correlation |
+| `WS10M` | Wind Speed at 10 Meters | `m/s` | Convective panel cooling modeling |
+
+All parameters exist and return valid numeric values formatted on a strict UTC hourly grid (`YYYYMMDDHH`).
+
+---
+
+## 6. Candidate Comparison Matrix
+
+| Evaluation Dimension | Candidate 1: System 2107 (Recommended) | Candidate 2: System 2105 | Candidate 3: System 9068 |
+|---|---|---|---|
+| **Public / Site Name** | Farm Solar Array (`FSA_1`) | Maui Ocean Center (`MUFFC_1`) | SR_CO (`s_SR_CO_1`) |
+| **Location & Region** | Arbuckle, CA (West) | Maui, HI (Pacific) | Kersey, CO (West) |
+| **Coordinates** | $38.996306^\circ\text{N},\,-122.134111^\circ\text{W}$ | $20.884134^\circ\text{N},\,-156.340543^\circ\text{W}$ | $40.386400^\circ\text{N},\,-104.551200^\circ\text{W}$ |
+| **Elevation** | $10.0\,\text{m}$ | $10.0\,\text{m}$ | $1,407.0\,\text{m}$ |
+| **Climate Type** | Köppen `Csa` (Mediterranean) | Köppen `Af` (Tropical Rainforest) | Köppen `Bsk` (Cold Semi-Arid) |
+| **Nameplate Capacity** | **893.0 kW DC** (Commercial) | **110.0 kW DC** (Commercial Rooftop) | **4,738.0 kW DC** (Utility Scale) |
+| **Array Geometry & Mount** | Fixed ground mount (Tilt $25.0^\circ$, Azimuth $180.0^\circ$ South) | Rooftop (Tilt varies, Azimuth varies across roof facets) | Horizontal single-axis tracker (Tilt $0.0^\circ$, Azimuth $180.0^\circ$, dynamic rotation) |
+| **Target AC Channel** | `meter_revenue_grade_ac_output_meter_149578` (in `2107_meter_15m_data.csv`) | `inv_string01_ac_output_(kwh)_inv_150164` .. `inv_string11` across 11 CSVs | `meter_ac_power_(kw)_meter_150150` (in `9068_ac_power_data.csv`) |
+| **Engineering Units** | Instantaneous `kW` | Cumulative `kWh` (meter counter) | Instantaneous `kW` |
+| **Scale / Offset** | None (`1.0` / `0.0`) | None (`1.0` / `0.0`) | None (`1.0` / `0.0`) |
+| **Hourly Energy Integration** | $\sum_{i=1}^4 P_i \times 0.25\,\text{h}$ | Cumulative differencing: $\Delta E = E_t - E_{t-1}$ across 11 files with reset handling | $\sum_{i=1}^{12} P_i \times \frac{5}{60}\,\text{h}$ |
+| **Sampling Resolution** | 15 minutes (`0.25 h`) | 15 minutes / irregular event-based | 5 minutes (`0.0833 h`) |
+| **Interval Alignment** | Explicitly `'L'` (Left-aligned) | Unspecified (`None`) | Explicitly `'L'` (Left-aligned) |
+| **Timezone & DST Behavior** | `PST8PDT` (Local civil time with DST; 75-min skip in spring) | `HST` (UTC-10; Hawaii has **no DST**) | `MST7MDT` (Local civil time with DST) |
+| **Date Coverage** | 2017-01-01 to 2023-11-09 (Nearly 7 years; + 2024/2025 extension) | 2018-12-15 to 2023-11-15 (4.92 years) | 2017-08-23 to 2023-11-16 (6.24 years) |
+| **Gap Rate / Quality** | **0.13% missingness** (10 outages >1h over 7 yrs; zero negative/null values) | High / irregular missingness (night drops, unsynchronized inverters) | Moderate missingness; winter snow blankets, inverter trip/clipping |
+| **S3 Dataset Size** | Dedicated meter CSV is **6.32 MB** (total S3 folder: 1.09 GB) | 16 files totaling **207.75 MB** | 15 files totaling **1.995 GB** |
+| **Licence & Terms** | DOE Solar Data Prize 2023 / NREL OEDI (DOI 10.25984/1846021) | DOE Solar Data Prize 2023 / NREL OEDI (DOI 10.25984/1846021) | DOE Solar Data Prize 2023 / NREL OEDI (DOI 10.25984/1846021) |
+
+---
+
+## 7. Recommendation, Rationale & Risk Assessment
+
+### 7.1 Final Recommendation: System 2107
+We decisively recommend **System 2107 (`Farm Solar Array`, Arbuckle, CA)** as the single production site for SolarCast.
+
+### 7.2 Core Rationale
+1. **Clean Dedicated Revenue Meter:** System 2107 provides a single revenue-grade total site meter file (`2107_meter_15m_data.csv`, 6.32 MB) with unambiguous active power in `kW` ($P \ge 0$), eliminating the need to synchronize and difference 11 separate inverter channels (unlike 2105).
+2. **Fixed Ground-Mount Geometry:** Tilt ($25.0^\circ$) and azimuth ($180.0^\circ$ South) are fixed and known, allowing standard pvlib solar position and clear-sky modeling without modeling backtracking motors, tracker angles (unlike 9068 with 285 tracker angles), or multi-roof facet shading (unlike 2105).
+3. **Exceptional Data Completeness:** The 15-minute meter record exhibits a **0.13% gap rate** over 7 continuous years (240,062 valid rows), satisfying the course requirement of $\ge 2$ overlapping years with multiple complete seasonal cycles.
+4. **Lightweight Footprint:** The complete 7-year revenue meter dataset is only **6.32 MB**, well below the 500 MB budget, enabling rapid local training, Feast materialization, and deterministic CI/CD test execution.
+5. **Exact Interval Alignment & Known Civil Timezone:** Metadata confirms left-alignment (`time_interval = 'L'`) and timezone `PST8PDT`, enabling exact timezone-aware conversion to UTC (`interval_start_utc`).
+
+### 7.3 Identified Risks & Mitigations
+- **Risk 1: Local Civil Time vs. UTC (DST Jumps):**  
+  *Risk:* `measured_on` skips an hour in spring and creates ambiguous timestamps in autumn.  
+  *Mitigation:* The ingestion pipeline (`src/data/ingestion.py`) explicitly localizes timestamps as `America/Los_Angeles` with `ambiguous='infer'` and `nonexistent='shift_forward'`, then converts to standard UTC (`interval_start_utc`).
+- **Risk 2: Instantaneous Power (kW) vs. Energy (kWh):**  
+  *Risk:* Revenue meter reports average instantaneous power (`kW`) rather than integrated energy (`kWh`).  
+  *Mitigation:* Integration formula $E_{\text{kWh}} = \sum_{i=1}^4 P_i \times 0.25\,\text{h}$ will be unit-tested against known fixtures in `tests/test_data.py`.
+- **Risk 3: Observational Weather Lag in Production Mode F1:**  
+  *Risk:* NASA POWER has an inherent publication lag of ~5–7 days for solar irradiance.  
+  *Mitigation:* As specified in the project plan, mode F1 enforces `available_at_utc <= issue_time_utc` with a simulated 14-day lag, while mode E1 uses target-hour observed weather for delayed deviation analysis.
