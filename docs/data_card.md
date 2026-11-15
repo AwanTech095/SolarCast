@@ -228,3 +228,75 @@ We decisively recommend **System 2107 (`Farm Solar Array`, Arbuckle, CA)** as th
 - **Risk 3: Observational Weather Lag in Production Mode F1:**  
   *Risk:* NASA POWER has an inherent publication lag of ~5–7 days for solar irradiance.  
   *Mitigation:* As specified in the project plan, mode F1 enforces `available_at_utc <= issue_time_utc` with a simulated 14-day lag, while mode E1 uses target-hour observed weather for delayed deviation analysis.
+
+---
+
+## 8. Data Verification & Empirical Quality Checks (Step 1 Audit)
+
+An empirical verification of `data/raw/2107_meter_15m_data.csv` (240,062 rows, 2017–2023) was performed to test data fidelity, interval mechanics, and physical alignment.
+
+### 8.1 Timestamp Format & Timezone Indicator
+- **Column Name:** `measured_on`
+- **Format:** `YYYY-MM-DD HH:MM:SS` (e.g. `'2017-01-01 00:15:00'`)
+- **Timezone Offset Indicator:** **None** (unadorned naive timestamp string without `Z` or `+HH:MM` / `-HH:MM` suffix).
+
+### 8.2 Daylight Saving Time (DST) Transition Tests
+- **Spring Forward Test (e.g. 2022-03-13):**
+  - Row count: **92 rows** (normal day has 96 rows).
+  - Observed gap: The series records `01:45:00`, then immediately jumps to `03:00:00`.
+  - **Explanation of the "75-minute jump":** On a regular 15-minute sampling interval, consecutive readings are spaced by 15 minutes. When local civil clocks advance from 02:00 to 03:00, 4 intervals (`02:00`, `02:15`, `02:30`, `02:45` totaling 60 minutes) do not exist in local time. The elapsed difference between `01:45:00` and `03:00:00` is $3:00 - 1:45 = 75\,\text{minutes}$.
+- **Fall Back Test (e.g. 2022-11-06):**
+  - Row count: **96 rows** (monotonically increasing from `00:00` to `23:45`, without duplicated timestamp strings).
+  - The data logging software did not write duplicate timestamps for the repeated 01:00–02:00 hour, maintaining a continuous 96-row sequence for that day.
+  - Across all tested years (2019, 2020, 2021, 2022), the spring transition consistently displays exactly 92 rows with the 75-minute gap, confirming that the timestamps reflect **local civil time (`PST8PDT` / `America/Los_Angeles`)**.
+
+### 8.3 Solar-Noon Alignment & Diurnal Peak Analysis
+To conclusively differentiate between Hypothesis 1 (Local civil time with DST: `America/Los_Angeles`) and Hypothesis 2 (Fixed Standard Time: `PST` / `UTC-8`), the diurnal peak power was analyzed using pvlib:
+- **Summer Solstice (June 15–21):**
+  - Solar noon at longitude $-122.1341^\circ\text{W}$ occurs at **20:09 UTC**.
+  - In PDT (UTC-7, Hypothesis 1), solar noon is **13:09 PDT**.
+  - In fixed PST (UTC-8, Hypothesis 2), solar noon is **12:09 PST**.
+  - Empirical June/July average peak generation occurs at **12:45 to 13:00** in `measured_on`.
+  - Since the meter is left-aligned (`time_interval = 'L'`), the interval starting at `13:00` represents $[13:00, 13:15)$ with midpoint **13:07:30**, matching the 13:09 solar noon within **1.5 minutes**. Under fixed PST, the peak would be 36–51 minutes late.
+- **Winter Solstice (December 15–21):**
+  - Solar noon occurs at **20:04 UTC**, which is **12:04 PST**.
+  - Empirical December average peak generation occurs at **11:45** (interval $[11:45, 12:00)$ with midpoint $11:52:30$), within **11.5 minutes** of solar noon.
+- **Clock Shift:** The empirical peak generation time shifts by **1 hour** between December (11:45) and July (13:00), which directly tracks the civil DST clock shift.
+- **Conclusion:** **Hypothesis 1 (Local civil time with DST) is confirmed.** Timestamps must be localized to `America/Los_Angeles` before conversion to UTC.
+
+### 8.4 AC Power Distribution & Capacity Normalization
+- **Total Records:** 240,062 rows.
+- **Observed Absolute Maximum:** `1,783.68 kW` (occurred once at `2018-02-18 12:30:00`).
+  - *Correction to initial summary:* This single value is an isolated 1-interval telemetry spike. In the entire 7-year dataset, only **1 row** exceeds 893 kW.
+  - The second highest recorded value is **708.48 kW**.
+- **Percentiles:**
+  - 99.9th percentile: `705.28 kW`
+  - 99.0th percentile: `679.04 kW`
+  - 50.0th percentile (median): `0.00 kW` (due to night hours)
+- **Zero & Negative Values:**
+  - Exact zeros: `125,925` rows (**52.46%**), corresponding to nighttime intervals.
+  - Negative values: **0** (strictly non-negative).
+  - Null / NaN values: **0**.
+- **Nighttime Output:** Sampling 5,386 intervals where solar elevation $< -6^\circ$ yielded a mean of `0.0029 kW` and maximum `0.64 kW` (small inverter tare/idle noise near zero).
+- **Sensor Stagnation:** Zero extended flat-lined periods during daytime.
+- **Capacity Normalization Decision (`capacity_kw`):**
+  - **DC Nameplate Capacity:** `893.0 kW DC`
+  - **Inverter Total Nominal AC Capacity:** `662.4 kW AC` ($24 \text{ inverters} \times 27.6\,\text{kW}$)
+  - **Observed Operational Maximum AC Output:** `708.48 kW AC` (allowing for standard ~10% inverter overload headroom)
+  - *Normalization policy:* In `configs/data.yaml`, record `capacity_dc_kw: 893.0` and `capacity_ac_nominal_kw: 662.4`. For capacity-normalized MAE, the standard course baseline normalizes against DC capacity ($893.0\,\text{kW}$); we report both DC-normalized and AC-normalized metrics in evaluations.
+
+### 8.5 Measurement Nature: Interval Average vs. Instantaneous Snapshot
+- **Metadata Confirmation:** Metric `149578` (`meter_revenue_grade_ac_output_meter_149578`) explicitly specifies:
+  - `aggregation_type: 'avg'`
+  - `sensor_name: 'meter_revenue_grade_ac_output (kW)'`
+  - `raw_units: 'kw'`
+- **Conclusion:** Each value is an **interval average** of power ($P_{\text{avg}}$ in kW) over the 15-minute left-aligned window $[t, t + 15\,\text{min})$.
+- **Energy Integration:** Interval energy is $E_{\text{kWh}} = P_{\text{avg, kW}} \times 0.25\,\text{h}$.
+
+### 8.6 Licence & Source Terms
+- **Dataset Title:** NLR/NREL PVDAQ 2023 Solar Data Prize Datasets
+- **Source Platform:** Open Energy Data Initiative (OEDI) on AWS Open Data
+- **Source URL:** `https://data.openei.org/submissions/5860` / `https://github.com/openEDI/documentation/blob/main/pvdaq.md`
+- **Identifier:** DOI `10.25984/1846021`
+- **Licence Terms:** Publicly available under the U.S. Department of Energy (DOE) Open Data Policy and AWS Open Data Sponsorship Program. Research, educational, and commercial reuse permitted with attribution citing NREL and DOI `10.25984/1846021`.
+
