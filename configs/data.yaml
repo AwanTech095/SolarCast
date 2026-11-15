@@ -1,0 +1,57 @@
+# SolarCast Data Configuration
+site_id: "2107"
+system_id: 2107
+public_name: "Farm Solar Array"
+location: "Arbuckle, CA"
+latitude: 38.996306
+longitude: -122.134111
+elevation_m: 10.0
+
+# System Capacity & Geometry
+capacity_dc_kw: 893.0
+capacity_ac_nominal_kw: 662.4
+capacity_ac_max_observed_kw: 708.48
+tilt_deg: 25.0
+azimuth_deg: 180.0
+tracking: false
+
+# Temporal Scope & Resolution
+start_date: "2017-01-01"
+end_date: "2023-11-09"
+source_resolution_min: 15
+canonical_resolution_hours: 1
+timezone: "America/Los_Angeles"
+timezone_code: "PST8PDT"
+time_interval_alignment: "L"
+
+# Operational Availability & Forecasting
+simulated_weather_lag_days: 14
+weather_lag_sensitivity_days: [7, 14, 30]
+
+# Weather Variables (NASA POWER Hourly API)
+weather_parameters:
+  - "ALLSKY_SFC_SW_DWN"  # All Sky Surface Shortwave Downward Irradiance (Wh/m^2)
+  - "T2M"                # Temperature at 2 Meters (C)
+  - "RH2M"               # Relative Humidity at 2 Meters (%)
+  - "WS10M"              # Wind Speed at 10 Meters (m/s)
+
+# Storage Paths (Relative to Repo Root)
+paths:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  manifest_path: "data/raw/manifest.json"
+  meter_csv: "data/raw/2107_meter_15m_data.csv"
+  metadata_json: "data/raw/metadata/2107_system_metadata.json"
+  weather_dir: "data/raw/weather"
+
+# Sources & Licences
+sources:
+  pvdaq:
+    s3_bucket: "oedi-data-lake"
+    s3_prefix: "pvdaq/2023-solar-data-prize/2107_OEDI/"
+    licence: "DOE Open Data / NREL OEDI (Attribution Required)"
+    doi: "10.25984/1846021"
+  nasa_power:
+    api_url: "https://power.larc.nasa.gov/api/temporal/hourly/point"
+    licence: "CC BY 4.0 (Cite NASA POWER)"
+    time_standard: "UTC"
