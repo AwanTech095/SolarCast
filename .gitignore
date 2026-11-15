@@ -21,6 +21,9 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Local experiments and generated artifacts; use DVC/MLflow storage
+data/
+!src/data/
+mlruns/
 /mlruns/
 /mlartifacts/
 /mlflow.db

@@ -115,6 +115,30 @@ Start with a bounded generation sample and matching site metadata. Document unit
 
 GitHub stores the shared code and configuration. An MLflow tracking service and DVC data remote are separate services that the team still needs to configure; creating this repository does not create them.
 
+### Member 1 setup
+
+Member 1 owns data extraction, validation, features, Feast feature store, modeling, and MLflow tracking.
+
+**Environment setup (PowerShell on Windows):**
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+**Configuration & Credentials:**
+- Copy `.env.example` to `.env` and configure tracking credentials:
+  `MLFLOW_TRACKING_URI`, `MLFLOW_TRACKING_USERNAME`, `MLFLOW_TRACKING_PASSWORD`.
+- Non-secret configurations reside in `configs/`.
+
+**Verification:**
+```powershell
+python tests/test_smoke.py
+# or with pytest and ruff:
+pytest tests/
+ruff check .
+```
+
 ## Collaboration rules
 
 - Use one shared repository with task branches and reviewed pull requests into `main`.
