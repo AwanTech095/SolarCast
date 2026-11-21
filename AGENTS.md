@@ -26,10 +26,15 @@ The human owner of this package does **not write code**. Write complete, runnabl
 - **No random splits.** Reserve the latest 20% of valid time as a final test set (opened once, after selection). Within the earlier
   80% use 3 expanding-window folds. Fit imputers/scalers only on training folds.
 - Lag/rolling features use strictly earlier observations. No centered windows, no backward fill from future rows.
-- NASA POWER is an observational archive, not a forecast. For the next-hour forecast (F1), weather is allowed only if
-  `available_at_utc <= issue_time_utc`. Default simulated weather lag is **14 days** (config value; also run 7 and 30).
-- Two separate modes: **F1** forecast (core) and **E1** expected-output estimate (uses observed weather, delayed analysis only).
-  Never mix their inputs or claims.
+- Scope revision authorized by the user on 2026-11-21: **F1** uses archived forecast irradiance/temperature,
+  production history and time features. NOAA HRRR is a candidate pending the Member 1 checklist in README.md.
+  Require `forecast_available_at_utc <= issue_time_utc`; initialization time alone does not establish release time.
+  Verify forecast valid intervals, source units and training-serving consistency before full training.
+- NASA POWER remains an observational archive for supporting retrospective analysis, not target-hour inputs
+  known in advance. The old 14-day NASA-lag approach is no longer the core forecast-data plan.
+- Core deviation alerts compare actual production with the stored F1 forecast after labels arrive. **E1** is
+  a separate supporting expected-output benchmark using observed weather; never mix its inputs or accuracy
+  with advance forecasts. Historical replay is not a live plant feed. Read README.md for current scope.
 - Metrics: daylight MAE (solar elevation > 0, independent of target values) is primary; also all-hour MAE, RMSE,
   capacity-normalized MAE. No MAPE near zero output.
 - Training and serving must use the **same** feature functions (`src/features/preprocessing.py`).
