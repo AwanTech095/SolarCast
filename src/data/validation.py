@@ -73,9 +73,15 @@ hourly_schema = DataFrameSchema(
             pa.Float64, checks=Check.in_range(-90.0, 90.0), nullable=False
         ),
         "is_daylight": Column(pa.Bool, nullable=False),
+        "high_sun": Column(pa.Bool, nullable=False),
         "quality_flag": Column(
             pa.String,
-            checks=Check.isin(["VALID", "INCOMPLETE_INTERVALS", "MISSING_DATA"]),
+            checks=Check.isin([
+                "VALID",
+                "INCOMPLETE_INTERVALS",
+                "MISSING_DATA",
+                "SUSPECT_ZERO",
+            ]),
             nullable=False,
         ),
     },

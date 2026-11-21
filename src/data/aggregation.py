@@ -149,14 +149,12 @@ def aggregate_to_hourly(
     merged["latitude"] = float(latitude)
     merged["longitude"] = float(longitude)
 
-    # Compute solar position via pvlib
-    eval_times = merged["interval_start_utc"]
-    if eval_solar_at_midpoint:
-        eval_times = eval_times + pd.Timedelta(minutes=30)
-
-    sol_pos = pvlib.solarposition.get_solarposition(eval_times, latitude, longitude)
+    # Compute solar position via pvlib at interval midpoint (interval_start_utc + 30m)
+    midpoint_times = merged["interval_start_utc"] + pd.Timedelta(minutes=30)
+    sol_pos = pvlib.solarposition.get_solarposition(midpoint_times, latitude, longitude)
     merged["solar_elevation_deg"] = sol_pos["elevation"].values
     merged["is_daylight"] = merged["solar_elevation_deg"] > 0.0
+    merged["high_sun"] = merged["solar_elevation_deg"] > 5.0
 
     # Retain exact canonical schema columns
     final_cols = [
@@ -170,6 +168,7 @@ def aggregate_to_hourly(
         "longitude",
         "solar_elevation_deg",
         "is_daylight",
+        "high_sun",
         "quality_flag",
     ]
     hourly_df = merged[final_cols].copy()

@@ -247,8 +247,39 @@ class TestHourlyAggregation:
         midnight_row = hourly_df[hourly_df["interval_start_utc"] == t_midnight].iloc[0]
 
         assert midday_row["solar_elevation_deg"] > 50.0  # Summer solar noon is ~74 deg
-        assert midday_row["is_daylight"] is True or midday_row["is_daylight"] == np.bool_(True)
+        assert bool(midday_row["is_daylight"]) is True
+        assert bool(midday_row["high_sun"]) is True
         assert midnight_row["solar_elevation_deg"] < 0.0
-        assert midnight_row["is_daylight"] is False or midnight_row["is_daylight"] == np.bool_(
-            False
+        assert bool(midnight_row["is_daylight"]) is False
+        assert bool(midnight_row["high_sun"]) is False
+
+    def test_sunrise_hour_midpoint_elevation(self) -> None:
+        """Verify that sunrise hour is classified as daylight using midpoint elevation."""
+        # On 2023-03-21 at 14:00 UTC:
+        # Elevation at start (14:00) is -2.89 deg (below horizon)
+        # Elevation at midpoint (14:30) is +2.95 deg (daylight, but high_sun is False)
+        t_sunrise = pd.Timestamp("2023-03-21 14:00:00", tz="UTC")
+        timestamps = [
+            t_sunrise,
+            t_sunrise + pd.Timedelta(minutes=15),
+            t_sunrise + pd.Timedelta(minutes=30),
+            t_sunrise + pd.Timedelta(minutes=45),
+        ]
+        clean_df = pd.DataFrame({
+            "interval_start_utc": timestamps,
+            "interval_end_utc": [t + pd.Timedelta(minutes=15) for t in timestamps],
+            _POWER_COL: [50.0, 100.0, 150.0, 200.0],
+        })
+
+        hourly_df = aggregate_to_hourly(
+            clean_df,
+            power_col=_POWER_COL,
+            min_intervals=4,
+            start_time_utc=t_sunrise,
+            end_time_utc=t_sunrise,
         )
+
+        row = hourly_df.iloc[0]
+        assert row["solar_elevation_deg"] == pytest.approx(2.95, abs=0.2)
+        assert bool(row["is_daylight"]) is True
+        assert bool(row["high_sun"]) is False
