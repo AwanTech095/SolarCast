@@ -19,7 +19,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 |---|---|---|---|
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
 | M1.1 | Data feasibility and site choice | Done (tests pass) | Site 2107 approved by human owner. Deep verification audit completed in docs/data_card.md. |
-| M1.1b | HRRR verification gate | Next (not started) | Scope revision: NOAA HRRR archived forecasts = core forecast weather. Follow README.md Member 1 checklist (access, fields, release timing, alignment, cost) on 1-week sample before full training. |
+| M1.1b | HRRR verification gate | Done (tests pass) | Feasibility audit completed in docs/data_feasibility.md, scripts/hrrr_feasibility.py, preview CSV, and correlation plots. Spatial mapping verified (334 m to nearest point, chunk 1.4); instantaneous semantics mapped via trapezoidal averaging; operational latency verified with 2-h lag (81/104 daylight hours show fresh forecast updates vs lag 3). Discovered fatal upstream bug in MesoWest HRRR Zarr (iris-grib #265 omits all forecast DSWRF chunks) and absence of pre-July 2018 forecast runs in Zarr. Clear-sky GHI (r=0.945) and HRRR analysis DSWRF (r=0.927) show high physical correlation. Gate recommendation: CONDITIONAL (use HRRR Zarr forecast 2m TMP + pvlib astronomical clear-sky irradiance + production history for Mode F1; retain NASA POWER for retrospective Mode E1). |
 | M1.2 | Validation + hourly dataset | Done (tests pass) | Implemented src/data/validation.py (Pandera) and src/data/aggregation.py. Quarantined 1 row > 893 kW (2018-02-18 12:30) into data/processed/quarantine.parquet. Ambiguous fall DST times mapped to 1st occurrence (PDT) with 2nd occurrence marked missing. Aggregated 60,096 continuous UTC hours (60,013 valid, 83 NaN = 0.1381%) into data/processed/hourly.parquet with pvlib solar elevation and quality flags. All 21 tests pass; ruff clean. |
 | M1.3 | Features + Feast (offline/online) | Not started | |
 | M1.4 | Baselines, Ridge, HistGB, tuning | Not started | |
@@ -88,6 +88,7 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 |---|---|---|
 | Hourly data schema + manifest | `configs/data.yaml`, `configs/data_manifest.json`, `docs/data_quality_report.md` | Built (quarantine.parquet, hourly.parquet [12 cols incl. high_sun & midpoint solar elevation], data_manifest.json) |
 | Test sample fixture (teammates) | `tests/fixtures/hourly_sample.csv`, `tests/fixtures/README.md` | Built (720 rows, July 2022 excerpt, <200 KB, DOI 10.25984/1846021) |
+| HRRR feasibility report + preview schema | `docs/data_feasibility.md`, `docs/data_feasibility_preview.csv`, `scripts/hrrr_feasibility.py` | Built (audited spatial mapping, GRIB2 semantics, 2-h release lag, Zarr iris-grib #265 bug, multi-year coverage, correlations r=0.945/0.927) |
 | Feature schema (ordered names/types/units) | `configs/feature_schema.json` | TBD |
 | Model bundle format | `src/models/bundle.py`, `docs/handoff_member3.md` | TBD |
 | Evaluation result | `evaluation.json` (baseline vs champion, thresholds, eligible flag, reasons) | TBD |
@@ -111,6 +112,10 @@ python -m src.data.ingestion --config configs/data.yaml
 # Run data validation, quarantine, and hourly dataset aggregation
 python -m src.data.aggregation --config configs/data.yaml
 # (or directly: .\.venv\Scripts\python -m src.data.aggregation --config configs/data.yaml)
+
+# Run NOAA HRRR forecast data feasibility audit (Task M1.1b)
+python scripts/hrrr_feasibility.py
+# (or directly: .\.venv\Scripts\python scripts/hrrr_feasibility.py)
 
 # Run test suite
 pytest
@@ -155,6 +160,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 ## 10. Decision log
 | Date | Decision | Why |
 |---|---|---|
+| 2026-11-22 | NOAA HRRR feasibility gate evaluation (M1.1b) | Reject standalone HRRR Zarr irradiance due to missing forecast DSWRF chunks (iris-grib #265 bug) and missing pre-July 2018 forecast runs in Zarr; recommend CONDITIONAL path utilizing HRRR forecast 2m temperature with operational 2-h lag, pvlib astronomical clear-sky irradiance (r=0.945), and past-only production lags for Mode F1; retain NASA POWER for retrospective Mode E1. |
 | 2026-11-22 | Daylight and solar elevation use interval midpoint (t + 30m); high_sun (>5 deg) added | Evaluating solar elevation at the midpoint of each hourly interval [t, t+1h) accurately captures daytime production during sunrise/sunset hours. Hours with high_sun and target_kwh == 0 in runs of 2+ consecutive hours are flagged SUSPECT_ZERO without mutating target_kwh. |
 | 2026-11-21 | DST fall-back handling, quarantine rules, and hourly aggregation threshold | Assign ambiguous local fall-back timestamps to the first occurrence (PDT); treat unrecorded second occurrence (09:00 UTC) as missing data (NaN target). Require min_intervals=4 (all 4 fifteen-minute intervals) for a valid hourly kWh target (sum(kW)*0.25); otherwise set target to NaN with explanatory quality_flag. Quarantine values > 893 kW, negatives, and non-finite without silent clipping into quarantine.parquet. |
 | 2026-11-21 | User authorized revised weather-driven F1 scope; HRRR is a candidate, NASA supports retrospective analysis | Preserve the assigned weather/irradiance/temperature objective without future-observation leakage. Member 1 must verify and report before source approval. |
@@ -166,6 +172,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+- 2026-11-22 (M1.1b - NOAA HRRR Verification Gate & Feasibility Audit): Completed comprehensive feasibility audit of candidate forecast weather source NOAA HRRR across AWS GRIB2 archive (s3://noaa-hrrr-bdp-pds/) and MesoWest Zarr archive (s3://hrrrzarr/). Authored docs/data_feasibility.md, scripts/hrrr_feasibility.py (reproducible, idempotent), docs/data_feasibility_preview.csv (48 daylight rows with exact 15-column schema), and docs/hrrr_pv_correlation.png. Verified spatial mapping (334 m to plant, chunk 1.4, offsets 48, 42); audited GRIB2 .idx semantics confirming instantaneous point forecasts mapped to hourly targets via trapezoidal numerical integration; verified 2-hour operational release lag (81/104 daylight hours show fresh updates vs lag 3). Discovered critical upstream flaw in MesoWest Zarr (all forecast DSWRF chunks omitted due to iris-grib #265 bug) and absence of pre-July 2018 forecast runs in Zarr. Demonstrated strong physical correlation between measured AC energy and pvlib clear-sky GHI (r=0.945) and HRRR analysis DSWRF (r=0.927). Issued CONDITIONAL recommendation (use HRRR Zarr 2m TMP + pvlib clear-sky irradiance + past-only production lags for Mode F1; retain NASA POWER for retrospective Mode E1). All 23 tests pass; ruff clean. Branch m1/hrrr-gate.
 - 2026-11-22 (M1.2 Refinement - Midpoint Solar Elevation, High-Sun & Zero Generation Audit): Shifted solar elevation evaluation to interval midpoint (+30m), added high_sun (>5 deg) boolean indicator, and updated Pandera hourly_schema. Conducted systematic daytime zero audit by elevation bin and year (1,439 daytime zeros), cataloging 55 multi-hour zero runs (>10 deg) and confirming absence of daytime frozen readings. Added SUSPECT_ZERO quality flag for 448 hours in runs of 2+ high-sun zero hours. Created tests/fixtures/hourly_sample.csv (720 rows, July 2022 excerpt, <200 KB) with DOI attribution in README.md. Replaced unsupported cause statements in docs with objective data observations. All 23 tests pass; ruff clean.
 - 2026-11-21 (M1.2 - Validation, Quarantine & Hourly Dataset Aggregation): Implemented Pandera schemas in src/data/validation.py and aggregation logic in src/data/aggregation.py. Quarantined single erroneous reading (1,783.68 kW on 2018-02-18 12:30) into data/processed/quarantine.parquet. Localized naive civil timestamps (America/Los_Angeles) to UTC, resolving ambiguous autumn fall-back timestamps to PDT and logging the unrecorded hour as missing. Aggregated 15-minute average power into continuous 60,096-row hourly dataset (data/processed/hourly.parquet) with pvlib solar elevation, boolean daylight flags, and quality_flag auditing (60,013 valid, 80 missing, 3 incomplete). Updated src/data/ingestion.py to output POSIX paths and verified units ('kW, 15-minute average'); regenerated data/raw/manifest.json and copied to configs/data_manifest.json (tracked). Authored docs/data_quality_report.md. Added unit test suite in tests/test_data.py (10 tests; 21 total tests in repo pass; ruff clean). Branch m1/hourly-dataset.
 - 2026-11-21: Updated README scope and ten-item Member 1 HRRR verification checklist, preserved upstream setup instructions, and synchronized agent/handoff scope. No HRRR files were downloaded and no dataset acceptance or model result is claimed. Reconcile with existing m1/data-feasibility research before continuing.
@@ -176,11 +183,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 
 ## 12. Next steps
-1. **M1.1b HRRR verification gate (Next task):**
-   - Follow README.md's Member 1 checklist for NOAA HRRR on one bounded overlapping week at System 2107 ($38.9963^\circ\text{N}, -122.1341^\circ\text{W}$).
-   - Verify surface downward shortwave radiation and 2m temperature fields, GRIB2 extraction method, source units, and valid intervals.
-   - Verify release timestamp vs initialization timestamp (`forecast_available_at_utc <= issue_time_utc`), spatial grid extraction, overlap with 2107 production, and storage/retrieval cost.
-   - Produce sample joined preview schema and submit `docs/data_feasibility.md` with GO, CONDITIONAL, or NO-GO recommendation for team review before full training.
-2. **M1.3 Features + Feast (Offline & Online feature store) (Follow-up):**
-   - Implement feature extraction in `src/features/preprocessing.py` (lags, rolling stats, cyclical time encodings, clear-sky index).
+1. **Team review of M1.1b Feasibility Gate:**
+   - Review docs/data_feasibility.md and decide whether to approve the CONDITIONAL path (HRRR forecast 2m temperature + pvlib astronomical clear-sky irradiance + production history for Mode F1).
+2. **M1.3 Features + Feast (Offline & Online feature store) (Next task):**
+   - Implement feature extraction in `src/features/preprocessing.py` (lags t-1, t-2, t-24, rolling stats, cyclical time encodings, pvlib clear-sky irradiance, HRRR forecast 2m temperature).
    - Configure Feast entities and feature views in `feature_store/feature_repo/` for offline point-in-time join and online SQLite store.
