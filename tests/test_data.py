@@ -283,3 +283,54 @@ class TestHourlyAggregation:
         assert row["solar_elevation_deg"] == pytest.approx(2.95, abs=0.2)
         assert bool(row["is_daylight"]) is True
         assert bool(row["high_sun"]) is False
+
+    def test_suspect_zero_flag_on_consecutive_high_sun_zeros(self) -> None:
+        """Verify that quality_flag=SUSPECT_ZERO is assigned only to runs of 2+ high-sun zeros."""
+        # 3 consecutive midday hours on 2023-06-21 (solar noon ~20:00 UTC, high_sun > 5 deg)
+        # Hour 18:00 (zero), Hour 19:00 (zero) -> run of 2, both SUSPECT_ZERO, target=0 unchanged
+        # Hour 20:00 (positive generation) -> VALID
+        t_base = pd.Timestamp("2023-06-21 18:00:00", tz="UTC")
+        t_18 = pd.date_range(t_base, periods=4, freq="15min", tz="UTC")
+        t_19 = pd.date_range(t_base + pd.Timedelta(hours=1), periods=4, freq="15min", tz="UTC")
+        t_20 = pd.date_range(t_base + pd.Timedelta(hours=2), periods=4, freq="15min", tz="UTC")
+
+        # Also add an isolated single high-sun zero hour on the next day at 18:00
+        t_next = pd.Timestamp("2023-06-22 18:00:00", tz="UTC")
+        t_next_18 = pd.date_range(t_next, periods=4, freq="15min", tz="UTC")
+        t_next_19 = pd.date_range(t_next + pd.Timedelta(hours=1), periods=4, freq="15min", tz="UTC")
+
+        all_t = t_18.append(t_19).append(t_20).append(t_next_18).append(t_next_19)
+        powers = [0.0] * 4 + [0.0] * 4 + [300.0] * 4 + [0.0] * 4 + [250.0] * 4
+
+        clean_df = pd.DataFrame({
+            "interval_start_utc": all_t,
+            "interval_end_utc": all_t + pd.Timedelta(minutes=15),
+            _POWER_COL: powers,
+        })
+
+        hourly_df = aggregate_to_hourly(
+            clean_df,
+            power_col=_POWER_COL,
+            min_intervals=4,
+            start_time_utc=t_base,
+            end_time_utc=t_next + pd.Timedelta(hours=1),
+        )
+
+        h18 = hourly_df[hourly_df["interval_start_utc"] == t_base].iloc[0]
+        h19 = hourly_df[hourly_df["interval_start_utc"] == t_base + pd.Timedelta(hours=1)].iloc[0]
+        h20 = hourly_df[hourly_df["interval_start_utc"] == t_base + pd.Timedelta(hours=2)].iloc[0]
+        h_iso = hourly_df[hourly_df["interval_start_utc"] == t_next].iloc[0]
+
+        # Consecutive run of 2: both flagged SUSPECT_ZERO, targets remain exactly 0.0
+        assert h18["quality_flag"] == "SUSPECT_ZERO"
+        assert h18["target_kwh"] == 0.0
+        assert h19["quality_flag"] == "SUSPECT_ZERO"
+        assert h19["target_kwh"] == 0.0
+
+        # Non-zero generation: VALID
+        assert h20["quality_flag"] == "VALID"
+        assert h20["target_kwh"] == pytest.approx(300.0)
+
+        # Isolated single zero hour: remains VALID (not in a run of 2+)
+        assert h_iso["quality_flag"] == "VALID"
+        assert h_iso["target_kwh"] == 0.0

@@ -156,6 +156,21 @@ def aggregate_to_hourly(
     merged["is_daylight"] = merged["solar_elevation_deg"] > 0.0
     merged["high_sun"] = merged["solar_elevation_deg"] > 5.0
 
+    # Flag SUSPECT_ZERO: high_sun (>5 deg) and target_kwh == 0 sitting inside a run of 2+ such hours
+    is_candidate = merged["high_sun"] & (merged["target_kwh"] == 0.0)
+    is_consec_prev = (
+        is_candidate
+        & is_candidate.shift(1, fill_value=False)
+        & (merged["interval_start_utc"].diff() == pd.Timedelta(hours=1))
+    )
+    is_consec_next = (
+        is_candidate
+        & is_candidate.shift(-1, fill_value=False)
+        & (merged["interval_start_utc"].diff(-1) == -pd.Timedelta(hours=1))
+    )
+    is_suspect_zero = is_consec_prev | is_consec_next
+    merged.loc[is_suspect_zero, "quality_flag"] = "SUSPECT_ZERO"
+
     # Retain exact canonical schema columns
     final_cols = [
         "site_id",
