@@ -20,7 +20,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
 | M1.1 | Data feasibility and site choice | Done (tests pass) | Site 2107 approved by human owner. Deep verification audit completed in docs/data_card.md. |
 | M1.1b | HRRR verification gate | Next (not started) | Scope revision: NOAA HRRR archived forecasts = core forecast weather. Follow README.md Member 1 checklist (access, fields, release timing, alignment, cost) on 1-week sample before full training. |
-| M1.2 | Validation + hourly dataset | In progress | configs/data.yaml and src/data/ingestion.py implemented (PVDAQ + NASA POWER); manifest.json generated; validation, HRRR integration & aggregation next |
+| M1.2 | Validation + hourly dataset | Done (tests pass) | Implemented src/data/validation.py (Pandera) and src/data/aggregation.py. Quarantined 1 row > 893 kW (2018-02-18 12:30) into data/processed/quarantine.parquet. Ambiguous fall DST times mapped to 1st occurrence (PDT) with 2nd occurrence marked missing. Aggregated 60,096 continuous UTC hours (60,013 valid, 83 NaN = 0.1381%) into data/processed/hourly.parquet with pvlib solar elevation and quality flags. All 21 tests pass; ruff clean. |
 | M1.3 | Features + Feast (offline/online) | Not started | |
 | M1.4 | Baselines, Ridge, HistGB, tuning | Not started | |
 | M1.5 | MLflow lineage, evaluation.json, model bundle | Not started | |
@@ -86,7 +86,8 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 ## 5. Contracts I own (fill in when built; link the file)
 | Contract | File | Status |
 |---|---|---|
-| Hourly data schema + manifest | `configs/data.yaml`, `data/raw/manifest.json` | In progress (raw manifest generated) |
+| Hourly data schema + manifest | `configs/data.yaml`, `configs/data_manifest.json`, `docs/data_quality_report.md` | Built (quarantine.parquet, hourly.parquet [12 cols incl. high_sun & midpoint solar elevation], data_manifest.json) |
+| Test sample fixture (teammates) | `tests/fixtures/hourly_sample.csv`, `tests/fixtures/README.md` | Built (720 rows, July 2022 excerpt, <200 KB, DOI 10.25984/1846021) |
 | Feature schema (ordered names/types/units) | `configs/feature_schema.json` | TBD |
 | Model bundle format | `src/models/bundle.py`, `docs/handoff_member3.md` | TBD |
 | Evaluation result | `evaluation.json` (baseline vs champion, thresholds, eligible flag, reasons) | TBD |
@@ -106,6 +107,10 @@ pip install -r requirements.txt
 # Run data ingestion pipeline (PVDAQ registration & NASA POWER weather fetch)
 python -m src.data.ingestion --config configs/data.yaml
 # (or directly: .\.venv\Scripts\python -m src.data.ingestion --config configs/data.yaml)
+
+# Run data validation, quarantine, and hourly dataset aggregation
+python -m src.data.aggregation --config configs/data.yaml
+# (or directly: .\.venv\Scripts\python -m src.data.aggregation --config configs/data.yaml)
 
 # Run test suite
 pytest
@@ -150,6 +155,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 ## 10. Decision log
 | Date | Decision | Why |
 |---|---|---|
+| 2026-11-22 | Daylight and solar elevation use interval midpoint (t + 30m); high_sun (>5 deg) added | Evaluating solar elevation at the midpoint of each hourly interval [t, t+1h) accurately captures daytime production during sunrise/sunset hours. Hours with high_sun and target_kwh == 0 in runs of 2+ consecutive hours are flagged SUSPECT_ZERO without mutating target_kwh. |
+| 2026-11-21 | DST fall-back handling, quarantine rules, and hourly aggregation threshold | Assign ambiguous local fall-back timestamps to the first occurrence (PDT); treat unrecorded second occurrence (09:00 UTC) as missing data (NaN target). Require min_intervals=4 (all 4 fifteen-minute intervals) for a valid hourly kWh target (sum(kW)*0.25); otherwise set target to NaN with explanatory quality_flag. Quarantine values > 893 kW, negatives, and non-finite without silent clipping into quarantine.parquet. |
 | 2026-11-21 | User authorized revised weather-driven F1 scope; HRRR is a candidate, NASA supports retrospective analysis | Preserve the assigned weather/irradiance/temperature objective without future-observation leakage. Member 1 must verify and report before source approval. |
 | 2026-11-16 | System 2107 approved as project PV site | Approved by human owner. Detailed verification confirmed local civil time with DST (America/Los_Angeles), 15-minute left-aligned average active power (kW), 893 kW DC capacity / 662.4 kW nominal AC capacity |
 | 2026-11-16 | Recommend System 2107 (Farm Solar Array, Arbuckle, CA) for production | Clean revenue meter (instantaneous kW, 6.32 MB, 0.13% missingness over 7 years), fixed 25° ground mount (no tracker/multi-roof complications), left-aligned, verified against NASA POWER hourly UTC weather |
@@ -159,6 +166,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+- 2026-11-22 (M1.2 Refinement - Midpoint Solar Elevation, High-Sun & Zero Generation Audit): Shifted solar elevation evaluation to interval midpoint (+30m), added high_sun (>5 deg) boolean indicator, and updated Pandera hourly_schema. Conducted systematic daytime zero audit by elevation bin and year (1,439 daytime zeros), cataloging 55 multi-hour zero runs (>10 deg) and confirming absence of daytime frozen readings. Added SUSPECT_ZERO quality flag for 448 hours in runs of 2+ high-sun zero hours. Created tests/fixtures/hourly_sample.csv (720 rows, July 2022 excerpt, <200 KB) with DOI attribution in README.md. Replaced unsupported cause statements in docs with objective data observations. All 23 tests pass; ruff clean.
+- 2026-11-21 (M1.2 - Validation, Quarantine & Hourly Dataset Aggregation): Implemented Pandera schemas in src/data/validation.py and aggregation logic in src/data/aggregation.py. Quarantined single erroneous reading (1,783.68 kW on 2018-02-18 12:30) into data/processed/quarantine.parquet. Localized naive civil timestamps (America/Los_Angeles) to UTC, resolving ambiguous autumn fall-back timestamps to PDT and logging the unrecorded hour as missing. Aggregated 15-minute average power into continuous 60,096-row hourly dataset (data/processed/hourly.parquet) with pvlib solar elevation, boolean daylight flags, and quality_flag auditing (60,013 valid, 80 missing, 3 incomplete). Updated src/data/ingestion.py to output POSIX paths and verified units ('kW, 15-minute average'); regenerated data/raw/manifest.json and copied to configs/data_manifest.json (tracked). Authored docs/data_quality_report.md. Added unit test suite in tests/test_data.py (10 tests; 21 total tests in repo pass; ruff clean). Branch m1/hourly-dataset.
 - 2026-11-21: Updated README scope and ten-item Member 1 HRRR verification checklist, preserved upstream setup instructions, and synchronized agent/handoff scope. No HRRR files were downloaded and no dataset acceptance or model result is claimed. Reconcile with existing m1/data-feasibility research before continuing.
 - 2026-11-16 (M1.1 Approved & Ingestion Implemented): System 2107 approved. Completed deep verification audit in docs/data_card.md (DST 75-min spring skip explanation, solar-noon alignment test proving America/Los_Angeles timezone, AC statistics and capacity normalization rationale, aggregation type 'avg'). Archived one-off scripts to scripts/exploration/. Created configs/data.yaml and src/data/ingestion.py with retry/backoff, idempotent download check, and manifest generator. Fetched complete 2017–2023 NASA POWER hourly weather and generated data/raw/manifest.json. Added tests/test_ingestion.py (11 tests pass, ruff clean). Committed on branch m1/data-ingestion.
 - 2026-11-16 (M1.1 - Data Feasibility): Completed feasibility audit of PVDAQ prize systems 2107, 2105, 9068 on OEDI S3 bucket and NASA POWER Hourly API. Created docs/data_card.md with full comparison matrix, DST analysis, parameter verification, and recommendation for System 2107. Downloaded metadata and small sample (~6.3 MB meter data, well under 500 MB budget) in data/raw/. Committed on branch m1/data-feasibility.
@@ -172,7 +181,6 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
    - Verify surface downward shortwave radiation and 2m temperature fields, GRIB2 extraction method, source units, and valid intervals.
    - Verify release timestamp vs initialization timestamp (`forecast_available_at_utc <= issue_time_utc`), spatial grid extraction, overlap with 2107 production, and storage/retrieval cost.
    - Produce sample joined preview schema and submit `docs/data_feasibility.md` with GO, CONDITIONAL, or NO-GO recommendation for team review before full training.
-2. **M1.2 Data validation (Follow-up):**
-   - Build `src/data/validation.py` to validate raw generation and weather against schema, check timestamp continuity, flag duplicates, out-of-bounds power/weather, and generate quarantine report.
-3. **M1.2 Hourly dataset aggregation (Follow-up):**
-   - Build `src/data/aggregation.py` to convert local 15-min average kW to hourly energy in kWh ($E = \sum P \times 0.25$), align with UTC hourly weather/forecasts, and produce canonical `data/processed/hourly_energy.parquet`.
+2. **M1.3 Features + Feast (Offline & Online feature store) (Follow-up):**
+   - Implement feature extraction in `src/features/preprocessing.py` (lags, rolling stats, cyclical time encodings, clear-sky index).
+   - Configure Feast entities and feature views in `feature_store/feature_repo/` for offline point-in-time join and online SQLite store.

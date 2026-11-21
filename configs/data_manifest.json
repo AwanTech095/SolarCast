@@ -1,0 +1,206 @@
+{
+  "manifest_version": "1.0",
+  "created_at_utc": "2026-11-21T19:06:25.376054+00:00",
+  "dataset_metadata": {
+    "site_id": "2107",
+    "system_id": 2107,
+    "public_name": "Farm Solar Array",
+    "latitude": 38.996306,
+    "longitude": -122.134111,
+    "elevation_m": 10.0,
+    "capacity_dc_kw": 893.0,
+    "capacity_ac_nominal_kw": 662.4,
+    "capacity_ac_max_observed_kw": 708.48,
+    "start_date": "2017-01-01",
+    "end_date": "2023-11-09",
+    "timezone": "America/Los_Angeles",
+    "simulated_weather_lag_days": 14
+  },
+  "artifacts": {
+    "pvdaq_meter_15m": {
+      "path": "data/raw/2107_meter_15m_data.csv",
+      "source_url": "s3://oedi-data-lake/pvdaq/2023-solar-data-prize/2107_OEDI/data/2107_meter_15m_data.csv",
+      "retrieved_at_utc": "2026-11-21T19:06:25.072597+00:00",
+      "sha256": "7f6c7cf80aae5dd8dd3687a7df95e35d03ffdc5bc0848256a1d76147bce9eb47",
+      "bytes": 6319525,
+      "row_count": 240062,
+      "units": "kW, 15-minute average",
+      "aggregation": "15-minute average",
+      "time_alignment": "L",
+      "licence": "DOE Open Data / NREL OEDI (Attribution Required)",
+      "doi": "10.25984/1846021"
+    },
+    "pvdaq_metadata": {
+      "path": "data/raw/metadata/2107_system_metadata.json",
+      "source_url": "s3://oedi-data-lake/pvdaq/2023-solar-data-prize/2107_OEDI/metadata/2107_system_metadata.json",
+      "retrieved_at_utc": "2026-11-21T19:06:25.073605+00:00",
+      "sha256": "17e4f7f448fcb2bec43f7610b40c1f7f4fc794ccc185e41dcde0514afba73ae5",
+      "bytes": 64652,
+      "row_count": 1,
+      "units": "metadata (JSON)",
+      "licence": "DOE Open Data / NREL OEDI (Attribution Required)",
+      "doi": "10.25984/1846021"
+    },
+    "nasa_power_weather_2017": {
+      "path": "data/raw/weather/nasa_power_2017.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20170101-20171231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.102329+00:00",
+      "sha256": "3965ae165ce6ef88e4a2922791a748df19aa466e22f6e102ecb94575c66481d0",
+      "bytes": 1032811,
+      "row_count": 8760,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2018": {
+      "path": "data/raw/weather/nasa_power_2018.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20180101-20181231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.135554+00:00",
+      "sha256": "782e50f9069e9af0a4598828f91a52565361c08552902a9b23469b28a9912628",
+      "bytes": 1032624,
+      "row_count": 8760,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2019": {
+      "path": "data/raw/weather/nasa_power_2019.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20190101-20191231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.182064+00:00",
+      "sha256": "b9d9996a25797f0b37f8055ce352b63397995cf3ed0657611cfdaaf4539e6cc3",
+      "bytes": 1032660,
+      "row_count": 8760,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2020": {
+      "path": "data/raw/weather/nasa_power_2020.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20200101-20201231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.231313+00:00",
+      "sha256": "37ff0394b3d8293853a9d2d5d05e6a7b31a1adfb37c28a630bbfe82ed9ab1c46",
+      "bytes": 1035552,
+      "row_count": 8784,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2021": {
+      "path": "data/raw/weather/nasa_power_2021.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20210101-20211231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.291687+00:00",
+      "sha256": "9c2a7e6163cbfda0b1b7957badfec3cb7665f2c9bd423f935ab88e085ce46398",
+      "bytes": 1032388,
+      "row_count": 8760,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2022": {
+      "path": "data/raw/weather/nasa_power_2022.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20220101-20221231",
+      "retrieved_at_utc": "2026-11-21T19:06:25.350361+00:00",
+      "sha256": "03daedaacd7f09e0cf85379ded642ab92370237c8ea898b0fe363c30e957d50d",
+      "bytes": 1032509,
+      "row_count": 8760,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    },
+    "nasa_power_weather_2023": {
+      "path": "data/raw/weather/nasa_power_2023.json",
+      "source_url": "https://power.larc.nasa.gov/api/temporal/hourly/point",
+      "query_window": "20230101-20231109",
+      "retrieved_at_utc": "2026-11-21T19:06:25.375424+00:00",
+      "sha256": "f3705c931c03b8d1d9a6ff68c7676da5e7f685f96029a41dbcb0608dafaba866",
+      "bytes": 886189,
+      "row_count": 7512,
+      "parameters": [
+        "ALLSKY_SFC_SW_DWN",
+        "T2M",
+        "RH2M",
+        "WS10M"
+      ],
+      "units": {
+        "ALLSKY_SFC_SW_DWN": "Wh/m^2",
+        "T2M": "C",
+        "RH2M": "%",
+        "WS10M": "m/s"
+      },
+      "time_standard": "UTC",
+      "licence": "CC BY 4.0 (Cite NASA POWER)"
+    }
+  }
+}

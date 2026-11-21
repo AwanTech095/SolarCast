@@ -119,20 +119,20 @@ def register_pvdaq_files(
 
     return {
         "pvdaq_meter_15m": {
-            "path": str(meter_path.relative_to(root)),
+            "path": meter_path.relative_to(root).as_posix(),
             "source_url": f"s3://{s3_bucket}/{meter_s3_key}",
             "retrieved_at_utc": datetime.now(UTC).isoformat(),
             "sha256": meter_sha,
             "bytes": meter_path.stat().st_size,
             "row_count": meter_rows,
-            "units": "kW (instantaneous power avg)",
+            "units": "kW, 15-minute average",
             "aggregation": "15-minute average",
             "time_alignment": config.get("time_interval_alignment", "L"),
             "licence": config["sources"]["pvdaq"]["licence"],
             "doi": config["sources"]["pvdaq"]["doi"],
         },
         "pvdaq_metadata": {
-            "path": str(meta_path.relative_to(root)),
+            "path": meta_path.relative_to(root).as_posix(),
             "source_url": f"s3://{s3_bucket}/{meta_s3_key}",
             "retrieved_at_utc": datetime.now(UTC).isoformat(),
             "sha256": meta_sha,
@@ -305,7 +305,7 @@ def fetch_all_weather(
         )
 
         manifest_entries[f"nasa_power_weather_{year}"] = {
-            "path": str(out_file.relative_to(root)),
+            "path": out_file.relative_to(root).as_posix(),
             "source_url": api_url,
             "query_window": f"{y_start}-{y_end}",
             "retrieved_at_utc": datetime.now(UTC).isoformat(),

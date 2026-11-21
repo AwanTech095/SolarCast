@@ -20,6 +20,7 @@ start_date: "2017-01-01"
 end_date: "2023-11-09"
 source_resolution_min: 15
 canonical_resolution_hours: 1
+min_intervals: 4
 timezone: "America/Los_Angeles"
 timezone_code: "PST8PDT"
 time_interval_alignment: "L"
