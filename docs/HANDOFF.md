@@ -18,8 +18,9 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | ID | Item | Status | Notes |
 |---|---|---|---|
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
-| M1.1 | Data feasibility and site choice | In progress | Partner research exists on m1/data-feasibility; System 2107 remains a candidate. HRRR access, fields, release timing and production alignment need the README verification report before sign-off. |
-| M1.2 | Validation + hourly dataset | Not started | |
+| M1.1 | Data feasibility and site choice | Done (tests pass) | Site 2107 approved by human owner. Deep verification audit completed in docs/data_card.md. |
+| M1.1b | HRRR verification gate | Next (not started) | Scope revision: NOAA HRRR archived forecasts = core forecast weather. Follow README.md Member 1 checklist (access, fields, release timing, alignment, cost) on 1-week sample before full training. |
+| M1.2 | Validation + hourly dataset | In progress | configs/data.yaml and src/data/ingestion.py implemented (PVDAQ + NASA POWER); manifest.json generated; validation, HRRR integration & aggregation next |
 | M1.3 | Features + Feast (offline/online) | Not started | |
 | M1.4 | Baselines, Ridge, HistGB, tuning | Not started | |
 | M1.5 | MLflow lineage, evaluation.json, model bundle | Not started | |
@@ -28,40 +29,33 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 
 Status values: Not started / In progress / Done (tests pass) / Blocked (say why).
 
-## 3. Data sources (proposed; final site NOT yet chosen)
-Sources below were originally reviewed on 2026-11-13. Member 1 has since reported a production audit on
-`m1/data-feasibility`; preserve and reconcile that branch's data card rather than treating its work as not started.
-Raw data has not been independently validated in this workspace. The new HRRR forecast-data route is pending verification.
+## 3. Data sources (audited in M1.1; see docs/data_card.md for full report)
+Production data was audited on 2026-11-16 via anonymous S3 access to `s3://oedi-data-lake/` and approved (System 2107).
+Under the 2026-11-21 scope revision, NOAA HRRR archived forecasts are the candidate core forecast weather source
+(pending the M1.1b verification gate in README.md), while NASA POWER supports retrospective analysis and the E1 benchmark.
 
 **Target (measured production): NLR/NREL PVDAQ via OEDI data lake.**
-- Docs: https://github.com/openEDI/documentation/blob/main/pvdaq.md. DOI 10.25984/1846021 (cite it).
-- Parquet on S3: `s3://oedi-data-lake/pvdaq/` (tables: system, site, metrics, meters, inverters, mount...) and
-  `s3://oedi-data-lake/pvdata/system_id=/year=/month=/day=/*.parquet` for the time series.
-- Typical resolution is 15 minutes, but it varies by system. Schema may change across years.
-- Key tables: `pvdaq_system` (power = DC nameplate kW), `pvdaq_site` (latitude, longitude, elevation),
-  `pvdaq_metrics` (units, scale/offset, `common_name` such as "AC energy"), `pvdaq_meters`/`pvdaq_inverters`
-  (`time_interval` = left/center/right alignment), `pvdaq_pvdata` (`measured_on` local, `utc_measured_on`, `metric_id`, `value`).
-- The `utc_measured_on` field "could include DST" per the docs, so verify it against the local timestamp.
-- Old PVDAQ V3 API is **decommissioned** (https://developer.nlr.gov/docs/solar/). Bulk download tool: PVDAQ Access
-  (https://github.com/NatLabRockies/pvdaq_access). Data map: https://openei.org/wiki/PVDAQ/PVData_Map
-- Prize datasets (5+ years, at least 15-min), stored differently (one directory per site, may be split by channel, some tens of GB):
-  - **2107**: 893 kW fixed ground-mount, California. **First candidate.**
-  - **2105**: 237 kW rooftop, several orientations, Hawaii. Backup (mixed orientations make it messier).
-  - **9068**: 4.7 MW single-axis tracker, Colorado. Backup.
-  - 7333 (257 MW, 10 s data) and 9069 (38.7 MW) are too large; avoid.
-- Open checks before accepting a site: AC energy/power channel exists, units, interval alignment, timezone, coverage and
-  gaps, licence, whether the S3 bucket needs no credentials.
+- Citation / DOI: 10.25984/1846021 (DOE Solar Data Prize 2023 / NREL).
+- Anonymous S3 access: `s3://oedi-data-lake/pvdaq/2023-solar-data-prize/{site}_OEDI/`.
+- Audited candidates:
+  - **2107 (Approved):** 893 kW DC fixed ground-mount, Arbuckle, CA ($38.9963^\circ\text{N}, -122.1341^\circ\text{W}$, 10 m elev). Dedicated revenue meter `2107_meter_15m_data.csv` (6.32 MB), 15-min instantaneous kW (interval average), left-aligned (`time_interval = 'L'`), 0.13% missingness over 7 years (2017–2023). Timestamps in local civil time (`PST8PDT`) with DST spring skip (must localize to `America/Los_Angeles` before UTC conversion).
+  - **2105 (Backup):** 110 kW DC rooftop, Maui, HI. No single meter file; split across 11 inverter CSVs reporting cumulative kWh (requires differencing + reset handling). Mixed tilts/azimuths across roof planes. HST (UTC-10, no DST).
+  - **9068 (Backup):** 4.74 MW DC single-axis tracker, Kersey, CO (1407 m elev). Single-axis tracker with 285 tracker angles. Inverter clipping near 3.82 MW AC limit. Massive dataset (2.0 GB across 15 files).
+- Note: The regular `pvdaq/parquet/` metadata tables contain standard systems, while prize datasets reside under `pvdaq/2023-solar-data-prize/`. Old PVDAQ V3 API is decommissioned.
 
-**Weather: NASA POWER hourly API.**
-- API: `/api/temporal/hourly/point` at https://power.larc.nasa.gov/ (docs: https://power.larc.nasa.gov/docs/services/api/temporal/hourly/).
-- **Default time standard is Local Solar Time. Always pass `time-standard=UTC`.** Hourly data from 2001 to near real time.
-- Max 15 parameters per request. Candidate fields: `ALLSKY_SFC_SW_DWN`, `T2M`, `RH2M`, `WS10M` (verify availability and units).
-- Registry page: https://registry.opendata.aws/nasa-power/. Licence: no restrictions, **cite NASA POWER**. It is CC BY 4.0.
-  Update lag: meteorological ~2-3 days, solar ~5-7 days. So it is an archive of observations, **not a next-hour forecast**.
-  The earlier plan used a simulated 14-day lag for F1. That is superseded as the core forecast-data route;
-  NASA now supports retrospective analysis and a separately evaluated E1 benchmark.
+**Weather: NASA POWER hourly API (supporting retrospective analysis & E1 benchmark).**
+- API: `/api/temporal/hourly/point` at https://power.larc.nasa.gov/ (tested and verified with `time-standard=UTC`).
+- Confirmed parameters & units for 2107 coordinates:
+  - `ALLSKY_SFC_SW_DWN`: All Sky Surface Shortwave Downward Irradiance (`Wh/m^2`, hourly insolation)
+  - `T2M`: Temperature at 2 Meters (`C`)
+  - `RH2M`: Relative Humidity at 2 Meters (`%`)
+  - `WS10M`: Wind Speed at 10 Meters (`m/s`)
+- Licence: CC BY 4.0 (cite NASA POWER).
+- Update lag: meteorological ~2-3 days, solar ~5-7 days. It is an archive of observations, **not an advance forecast**.
+- Scope update: The earlier plan used a simulated 14-day lag for F1. That is superseded as the core forecast-data route;
+  NASA POWER now supports retrospective analysis and a separately evaluated E1 benchmark.
 
-**Forecast weather: NOAA HRRR archive (new candidate).**
+**Forecast weather: NOAA HRRR archive (core forecast candidate; pending M1.1b verification gate).**
 - Archive: https://registry.opendata.aws/noaa-hrrr-pds/. Retrieve only a bounded plant/date sample first.
 - Verify irradiance/downward shortwave radiation and near-surface temperature, units, valid intervals,
   spatial extraction and overlap with production. Initialization time is not publication time.
@@ -92,7 +86,7 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 ## 5. Contracts I own (fill in when built; link the file)
 | Contract | File | Status |
 |---|---|---|
-| Hourly data schema + manifest | `configs/data.yaml`, `data/processed/manifest.json` | TBD |
+| Hourly data schema + manifest | `configs/data.yaml`, `data/raw/manifest.json` | In progress (raw manifest generated) |
 | Feature schema (ordered names/types/units) | `configs/feature_schema.json` | TBD |
 | Model bundle format | `src/models/bundle.py`, `docs/handoff_member3.md` | TBD |
 | Evaluation result | `evaluation.json` (baseline vs champion, thresholds, eligible flag, reasons) | TBD |
@@ -108,6 +102,10 @@ py -3.11 -m venv .venv
 
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
+# Run data ingestion pipeline (PVDAQ registration & NASA POWER weather fetch)
+python -m src.data.ingestion --config configs/data.yaml
+# (or directly: .\.venv\Scripts\python -m src.data.ingestion --config configs/data.yaml)
 
 # Run test suite
 pytest
@@ -140,7 +138,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - [ ] Request/response schema and feature retrieval mode for the API (Member 3)
 - [ ] Model bundle format Member 3 needs (joblib vs MLflow pyfunc)
 - [ ] Final deadline date, machine specs, AWS budget (all)
-- [ ] Site/dataset sign-off by all three after M1.1
+- [x] Site/dataset sign-off by all three after M1.1 (Approved: System 2107 Farm Solar Array, Arbuckle, CA)
 
 ## 9. Risks / known issues
 - Data access and size (prize datasets can be tens of GB): sample first, then scale.
@@ -153,19 +151,28 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | Date | Decision | Why |
 |---|---|---|
 | 2026-11-21 | User authorized revised weather-driven F1 scope; HRRR is a candidate, NASA supports retrospective analysis | Preserve the assigned weather/irradiance/temperature objective without future-observation leakage. Member 1 must verify and report before source approval. |
-| 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
-| 2026-11-13 | First candidate system 2107; backups 2105, 9068 | Mid-size fixed system with long history; not yet validated |
-| 2026-11-15 | Member 1 scaffold & directory layout | Created Member 1 package structure on branch m1/scaffold with empty __init__.py files, .gitkeep in empty folders, ruff config (line-length 100), .env.example, and test_smoke.py |
+| 2026-11-16 | System 2107 approved as project PV site | Approved by human owner. Detailed verification confirmed local civil time with DST (America/Los_Angeles), 15-minute left-aligned average active power (kW), 893 kW DC capacity / 662.4 kW nominal AC capacity |
+| 2026-11-16 | Recommend System 2107 (Farm Solar Array, Arbuckle, CA) for production | Clean revenue meter (instantaneous kW, 6.32 MB, 0.13% missingness over 7 years), fixed 25° ground mount (no tracker/multi-roof complications), left-aligned, verified against NASA POWER hourly UTC weather |
 | 2026-11-15 | Pinned stack in requirements.txt | Pinned 16 core Member 1 packages for Python 3.11 (pandas 2.2.2, numpy 1.26.4, scikit-learn 1.5.2, scipy 1.13.1, mlflow 2.17.2, pvlib 0.11.1, pandera 0.20.4, etc.), excluding feast/airflow/kubeflow/bentoml to avoid early dependency conflicts |
+| 2026-11-15 | Member 1 scaffold & directory layout | Created Member 1 package structure on branch m1/scaffold with empty __init__.py files, .gitkeep in empty folders, ruff config (line-length 100), .env.example, and test_smoke.py |
+| 2026-11-13 | First candidate system 2107; backups 2105, 9068 | Mid-size fixed system with long history; not yet validated |
+| 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
 - 2026-11-21: Updated README scope and ten-item Member 1 HRRR verification checklist, preserved upstream setup instructions, and synchronized agent/handoff scope. No HRRR files were downloaded and no dataset acceptance or model result is claimed. Reconcile with existing m1/data-feasibility research before continuing.
-- 2026-11-13: File created. Sources reviewed. No code written yet.
-- 2026-11-15 (P1 - Scaffolding): Completed Member 1 package scaffold on branch m1/scaffold: created package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
+- 2026-11-16 (M1.1 Approved & Ingestion Implemented): System 2107 approved. Completed deep verification audit in docs/data_card.md (DST 75-min spring skip explanation, solar-noon alignment test proving America/Los_Angeles timezone, AC statistics and capacity normalization rationale, aggregation type 'avg'). Archived one-off scripts to scripts/exploration/. Created configs/data.yaml and src/data/ingestion.py with retry/backoff, idempotent download check, and manifest generator. Fetched complete 2017–2023 NASA POWER hourly weather and generated data/raw/manifest.json. Added tests/test_ingestion.py (11 tests pass, ruff clean). Committed on branch m1/data-ingestion.
+- 2026-11-16 (M1.1 - Data Feasibility): Completed feasibility audit of PVDAQ prize systems 2107, 2105, 9068 on OEDI S3 bucket and NASA POWER Hourly API. Created docs/data_card.md with full comparison matrix, DST analysis, parameter verification, and recommendation for System 2107. Downloaded metadata and small sample (~6.3 MB meter data, well under 500 MB budget) in data/raw/. Committed on branch m1/data-feasibility.
 - 2026-11-15 (P2 - Environment & Requirements): Added pinned requirements.txt (16 packages for Python 3.11). Created .venv, installed requirements, verified pytest (4 passed) and ruff check . (clean). Fixed import sorting in tests/test_smoke.py and updated run instructions in docs/HANDOFF.md.
+- 2026-11-15 (P1 - Scaffolding): Completed Member 1 package scaffold on branch m1/scaffold: created package directories (configs, data/{raw,processed}, src/{data,features,models}, feature_store/feature_repo, tests/fixtures, evidence), added empty __init__.py in src packages and .gitkeep in empty folders, added .env.example, configured pyproject.toml with ruff line-length 100, added tests/test_smoke.py (tests pass), updated .gitignore with data/ and mlruns/, extended README.md with Member 1 setup section.
+- 2026-11-13: File created. Sources reviewed. No code written yet.
 
 ## 12. Next steps
-1. Bring this scope update into Member 1's existing research branch without discarding its data-card findings.
-2. Complete the README HRRR verification checklist on one overlapping week, then assess seasonal coverage and cost.
-3. Submit docs/data_feasibility.md and a reproducible script/sample, marking verified/assumed/unresolved findings;
-   recommend GO, CONDITIONAL or NO-GO and stop for team review before full training/site sign-off.
+1. **M1.1b HRRR verification gate (Next task):**
+   - Follow README.md's Member 1 checklist for NOAA HRRR on one bounded overlapping week at System 2107 ($38.9963^\circ\text{N}, -122.1341^\circ\text{W}$).
+   - Verify surface downward shortwave radiation and 2m temperature fields, GRIB2 extraction method, source units, and valid intervals.
+   - Verify release timestamp vs initialization timestamp (`forecast_available_at_utc <= issue_time_utc`), spatial grid extraction, overlap with 2107 production, and storage/retrieval cost.
+   - Produce sample joined preview schema and submit `docs/data_feasibility.md` with GO, CONDITIONAL, or NO-GO recommendation for team review before full training.
+2. **M1.2 Data validation (Follow-up):**
+   - Build `src/data/validation.py` to validate raw generation and weather against schema, check timestamp continuity, flag duplicates, out-of-bounds power/weather, and generate quarantine report.
+3. **M1.2 Hourly dataset aggregation (Follow-up):**
+   - Build `src/data/aggregation.py` to convert local 15-min average kW to hourly energy in kWh ($E = \sum P \times 0.25$), align with UTC hourly weather/forecasts, and produce canonical `data/processed/hourly_energy.parquet`.
