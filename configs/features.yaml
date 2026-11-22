@@ -1,0 +1,22 @@
+# SolarCast Feature Engineering Configuration
+schema_version: "1.0.0"
+site_id: "2107"
+public_name: "Farm Solar Array"
+location: "Arbuckle, CA"
+latitude: 38.996306
+longitude: -122.134111
+elevation_m: 10.0
+capacity_dc_kw: 893.0
+capacity_ac_nominal_kw: 662.4
+capacity_ac_observed_kw: 708.48
+p95_clearsky_ratio: 1.330944
+
+operational_timing:
+  production_available_delay_minutes: 15
+  weather_availability_lag_hours: 2
+
+feature_parameters:
+  quarter_hourly_lags_minutes: [0, 15, 30, 45]
+  hourly_lags_hours: [2, 24, 168]
+  rolling_windows_hours: [6, 24]
+  astronomical_eval_point: "interval_midpoint"

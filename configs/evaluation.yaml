@@ -1,0 +1,36 @@
+# SolarCast Evaluation Configuration
+schema_version: "1.0.0"
+site_id: "2107"
+capacity_dc_kw: 893.0
+capacity_ac_nominal_kw: 662.4
+capacity_ac_observed_kw: 708.48
+
+evaluation_window:
+  start_utc: "2018-07-12 00:00:00"
+  end_utc: "2023-11-09 23:00:00"
+
+split:
+  train_dev_ratio: 0.80
+  final_test_ratio: 0.20
+  final_test_opened: false
+  cv_method: "expanding_window"
+  n_splits: 3
+
+operational_timing:
+  production_available_delay_minutes: 15
+  weather_availability_lag_hours: 2
+
+target_filtering:
+  allowed_quality_flags: ["VALID"]
+  exclude_suspect_zero: true
+  daylight_column: "is_daylight"
+
+metrics:
+  primary: "daylight_mae"
+  capacity_denominator_kwh: 893.0  # 893 kW * 1h
+  evaluated_metrics:
+    - "daylight_mae"
+    - "all_hour_mae"
+    - "rmse"
+    - "capacity_normalized_daylight_mae"
+    - "per_month_daylight_mae"

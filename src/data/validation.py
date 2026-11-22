@@ -90,6 +90,46 @@ hourly_schema = DataFrameSchema(
 )
 
 
+# Aggregated quarter-hourly (15-minute) dataset schema
+quarter_hourly_schema = DataFrameSchema(
+    columns={
+        "site_id": Column(pa.String, nullable=False),
+        "interval_start_utc": Column("datetime64[ns, UTC]", nullable=False),
+        "interval_end_utc": Column("datetime64[ns, UTC]", nullable=False),
+        "power_kw": Column(
+            pa.Float64,
+            checks=[
+                Check.greater_than_or_equal_to(0.0),
+                Check.less_than_or_equal_to(893.0),
+            ],
+            nullable=True,
+        ),
+        "capacity_kw": Column(pa.Float64, checks=Check.greater_than(0.0), nullable=False),
+        "capacity_ac_observed_kw": Column(
+            pa.Float64, checks=Check.greater_than(0.0), nullable=False
+        ),
+        "latitude": Column(pa.Float64, checks=Check.in_range(-90.0, 90.0), nullable=False),
+        "longitude": Column(pa.Float64, checks=Check.in_range(-180.0, 180.0), nullable=False),
+        "solar_elevation_deg": Column(
+            pa.Float64, checks=Check.in_range(-90.0, 90.0), nullable=False
+        ),
+        "is_daylight": Column(pa.Bool, nullable=False),
+        "high_sun": Column(pa.Bool, nullable=False),
+        "quality_flag": Column(
+            pa.String,
+            checks=Check.isin([
+                "VALID",
+                "MISSING_DATA",
+                "SUSPECT_ZERO",
+            ]),
+            nullable=False,
+        ),
+    },
+    strict=True,
+    coerce=True,
+)
+
+
 # -----------------------------------------------------------------------------
 # Validation and Quarantine Logic
 # -----------------------------------------------------------------------------
