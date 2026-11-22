@@ -1,6 +1,7 @@
 """Unit tests for raw generation data validation, quarantine, and hourly aggregation."""
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -493,15 +494,53 @@ class TestHRRRExtraction:
         fs = get_thread_fs()
         res = extract_hour_weather(h, cfg, fs, mock_scan)
 
-        assert res["extraction_status"] == "SUCCESS"
+        assert res["extraction_status"] == "SUCCESS:tmp,tcdc"
         assert res["fallback_used"] is False
         assert res["run_age_hours"] == 2.0
         assert res["tmp_c"] == pytest.approx(26.0)
-        # Check cloud variables also computed
-        assert res["tcdc_pct"] == pytest.approx(299.15)  # mock returned same for all vars
+        # Check cloud variables also computed or NaN based on requested variables
+        assert res["tcdc_pct"] == pytest.approx(299.15)
+        assert np.isnan(res["lcdc_pct"])
+        assert np.isnan(res["mcdc_pct"])
+        assert np.isnan(res["hcdc_pct"])
         # Verify schema columns
         for col in HRRR_FEATURE_COLUMNS:
             assert col in res
+
+    def test_variable_subset_selection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify variable subset selection and unrequested columns staying NaN."""
+        h = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        init_time = pd.Timestamp("2022-06-13 12:00:00", tz="UTC")
+        mock_scan = {init_time}
+
+        class MockZarrArray:
+            def __getitem__(self, key: tuple[int, int, int]) -> float:
+                return 300.15
+
+        monkeypatch.setattr(
+            "src.data.hrrr.get_cached_zarr_array", lambda var_path, fs: MockZarrArray()
+        )
+
+        # Test single variable tmp
+        cfg_tmp = HRRRExtractorConfig(variables=["tmp"])
+        fs = get_thread_fs()
+        res_tmp = extract_hour_weather(h, cfg_tmp, fs, mock_scan)
+        assert res_tmp["extraction_status"] == "SUCCESS:tmp"
+        assert not np.isnan(res_tmp["tmp_c"])
+        assert np.isnan(res_tmp["tcdc_pct"])
+        assert np.isnan(res_tmp["lcdc_pct"])
+        assert np.isnan(res_tmp["mcdc_pct"])
+        assert np.isnan(res_tmp["hcdc_pct"])
+
+        # Test all 5 variables
+        cfg_all = HRRRExtractorConfig(variables=["tmp", "tcdc", "lcdc", "mcdc", "hcdc"])
+        res_all = extract_hour_weather(h, cfg_all, fs, mock_scan)
+        assert res_all["extraction_status"] == "SUCCESS:tmp,tcdc,lcdc,mcdc,hcdc"
+        assert not np.isnan(res_all["tmp_c"])
+        assert not np.isnan(res_all["tcdc_pct"])
+        assert not np.isnan(res_all["lcdc_pct"])
+        assert not np.isnan(res_all["mcdc_pct"])
+        assert not np.isnan(res_all["hcdc_pct"])
 
     def test_merge_parts(self, tmp_path: Path) -> None:
         """Verify merging of multiple monthly parquet parts."""
@@ -531,6 +570,44 @@ class TestHRRRExtraction:
         assert merged_df["target_start_utc"].iloc[0] == t1
         assert merged_df["target_start_utc"].iloc[1] == t2
 
+    def test_cli_argument_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Verify CLI argument parsing in scripts/hrrr_extract.py."""
+        import scripts.hrrr_extract as he
+
+        test_args = [
+            "scripts/hrrr_extract.py",
+            "--start", "2022-10-17",
+            "--end", "2023-11-09",
+            "--variables", "tmp,tcdc",
+            "--threads", "8",
+            "--parts-dir", "data/test_parts",
+        ]
+        monkeypatch.setattr("sys.argv", test_args)
+
+        # Intercept run_hrrr_pipeline so we don't do real I/O
+        captured_kwargs: dict[str, Any] = {}
+
+        def mock_pipeline(**kwargs: Any) -> dict[str, Any]:
+            captured_kwargs.update(kwargs)
+            return {
+                "total_daylight_hours": 0,
+                "total_months": 0,
+                "processed_months": [],
+                "skipped_months": [],
+                "merged": False,
+            }
+
+        monkeypatch.setattr(he, "run_hrrr_pipeline", mock_pipeline)
+        ret = he.main()
+
+        assert ret == 0
+        cfg = captured_kwargs["config"]
+        assert cfg.start_date == "2022-10-17"
+        assert cfg.end_date == "2023-11-09"
+        assert cfg.variables == ["tmp", "tcdc"]
+        assert cfg.num_threads == 8
+        assert captured_kwargs["parts_dir"] == Path("data/test_parts")
+
     def test_regression_june_week_sample(self) -> None:
         """Regression test against data/processed/june_week_extracted.parquet."""
         june_path = Path("data/processed/june_week_extracted.parquet")
@@ -549,7 +626,7 @@ class TestHRRRExtraction:
         t = pd.to_datetime(row["interval_start_utc"], utc=True)
         res = extract_hour_weather(t, cfg, fs, scan_set)
 
-        assert res["extraction_status"] in ("SUCCESS", "FALLBACK_SUCCESS")
+        assert res["extraction_status"].startswith(("SUCCESS", "FALLBACK_SUCCESS"))
         assert res["tmp_c"] == pytest.approx(row["forecast_tmp_c"], abs=0.1)
         assert res["tcdc_pct"] == pytest.approx(row["forecast_tcdc_pct"], abs=0.1)
 

@@ -22,7 +22,7 @@ import concurrent.futures
 import datetime
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +80,7 @@ class HRRRExtractorConfig:
     start_date: str = "2018-07-12 00:00:00"
     end_date: str = "2023-11-09 23:00:00"
     s3_region: str = "us-west-1"
+    variables: list[str] = field(default_factory=lambda: ["tmp", "tcdc"])
 
     @classmethod
     def from_yaml(cls, config_path: Path | str = DEFAULT_DATA_CONFIG) -> HRRRExtractorConfig:
@@ -251,6 +252,7 @@ def extract_hour_weather(
 ) -> dict[str, Any]:
     """Extract forecast weather features for a single daylight prediction hour."""
     target_start = issue_time
+    vars_str = ",".join(config.variables)
     empty_result: dict[str, Any] = {
         "site_id": config.site_id,
         "issue_time_utc": issue_time,
@@ -264,7 +266,7 @@ def extract_hour_weather(
         "lcdc_pct": np.nan,
         "mcdc_pct": np.nan,
         "hcdc_pct": np.nan,
-        "extraction_status": "FAILED_NO_RUN",
+        "extraction_status": f"FAILED_NO_RUN:{vars_str}",
     }
 
     # 1. Candidate run selection with fallback
@@ -296,7 +298,8 @@ def extract_hour_weather(
     extracted: dict[str, float] = {}
     read_success = True
 
-    for var_key, var_rel_path in HRRR_VARIABLES.items():
+    for var_key in config.variables:
+        var_rel_path = HRRR_VARIABLES[var_key]
         val = np.nan
         var_full_path = f"{base_zarr}/{var_rel_path}"
 
@@ -319,12 +322,15 @@ def extract_hour_weather(
 
         extracted[var_key] = val
 
-    if not read_success or np.isnan(extracted.get("tmp", np.nan)):
-        empty_result["extraction_status"] = "FAILED_READ"
+    req_failed = any(np.isnan(extracted.get(vk, np.nan)) for vk in config.variables)
+    if not read_success or req_failed:
+        empty_result["extraction_status"] = f"FAILED_READ:{vars_str}"
         empty_result["weather_run_init_utc"] = init_time
         return empty_result
 
-    status = "FALLBACK_SUCCESS" if fallback_offset > 0 else "SUCCESS"
+    status = (
+        f"FALLBACK_SUCCESS:{vars_str}" if fallback_offset > 0 else f"SUCCESS:{vars_str}"
+    )
     avail_time = init_time + pd.Timedelta(hours=config.weather_lag_hours)
 
     return {
@@ -362,7 +368,7 @@ def extract_month_worker(
     )
     if tracker is not None:
         tracker.increment(
-            n_requests=len(HRRR_VARIABLES),
+            n_requests=len(config.variables),
             status=res["extraction_status"],
             month_label=month_label,
         )
@@ -450,8 +456,10 @@ def run_hrrr_pipeline(
     df_h = pd.read_parquet(hourly_path)
     df_h["interval_start_utc"] = pd.to_datetime(df_h["interval_start_utc"], utc=True)
 
-    t_start = pd.Timestamp(config.start_date, tz="UTC")
-    t_end = pd.Timestamp(config.end_date, tz="UTC")
+    t_start = pd.to_datetime(config.start_date, utc=True)
+    t_end = pd.to_datetime(config.end_date, utc=True)
+    if len(str(config.end_date).strip()) <= 10:
+        t_end = t_end + pd.Timedelta(hours=23, minutes=59, seconds=59)
 
     mask = (
         (df_h["interval_start_utc"] >= t_start)

@@ -22,6 +22,7 @@ from src.data.hrrr import (
     DEFAULT_MERGED_PATH,
     DEFAULT_PARTS_DIR,
     DEFAULT_SCAN_PATH,
+    HRRR_VARIABLES,
     HRRRExtractorConfig,
     merge_parts,
     run_hrrr_pipeline,
@@ -63,14 +64,23 @@ def main() -> int:
         help="Log file for progress tracking",
     )
     parser.add_argument(
+        "--start",
         "--start-date",
+        dest="start_date",
         default=None,
-        help="Filter start UTC timestamp (e.g. 2022-06-13 00:00:00)",
+        help="Filter start UTC timestamp (e.g. 2022-10-17)",
     )
     parser.add_argument(
+        "--end",
         "--end-date",
+        dest="end_date",
         default=None,
-        help="Filter end UTC timestamp (e.g. 2022-06-19 23:00:00)",
+        help="Filter end UTC timestamp (e.g. 2023-11-09)",
+    )
+    parser.add_argument(
+        "--variables",
+        default="tmp,tcdc",
+        help="Comma-separated variables to extract (default 'tmp,tcdc'; options: tmp,tcdc,lcdc,mcdc,hcdc)",
     )
     parser.add_argument(
         "--threads",
@@ -123,10 +133,21 @@ def main() -> int:
     if args.end_date:
         cfg.end_date = args.end_date
 
+    # Validate and configure requested variables
+    vars_raw = [v.strip().lower() for v in args.variables.split(",") if v.strip()]
+    valid_vars = set(HRRR_VARIABLES.keys())
+    for v in vars_raw:
+        if v not in valid_vars:
+            raise ValueError(f"Unknown variable '{v}'. Allowed variables: {sorted(valid_vars)}")
+    if not vars_raw:
+        raise ValueError("At least one variable must be specified in --variables.")
+    cfg.variables = vars_raw
+
     print("=================================================================")
     print("NOAA HRRR Forecast Weather Extraction (Mode F1)")
     print("=================================================================")
     print(f"Site ID: {cfg.site_id} (Grid X={cfg.plant_ix}, Y={cfg.plant_iy})")
+    print(f"Variables: {', '.join(cfg.variables)}")
     print(f"Window: {cfg.start_date} to {cfg.end_date}")
     print(f"Availability Lag: {cfg.weather_lag_hours}h | Max Fallback: {cfg.max_fallback_hours}h")
     print(f"Concurrency: {cfg.num_threads} threads | Timeout: {cfg.timeout_sec}s")
