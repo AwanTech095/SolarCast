@@ -200,6 +200,7 @@ def run_baseline_evaluation(
     hourly_path: Path | str = DEFAULT_HOURLY_PATH,
     quarter_hourly_path: Path | str = DEFAULT_QH_PATH,
     report_output_path: Path | str = DEFAULT_REPORT_PATH,
+    delay_minutes: int | None = None,
 ) -> dict[str, Any]:
     """Execute complete 3-fold chronological evaluation of all baseline models."""
     with open(config_path, encoding="utf-8") as f:
@@ -209,6 +210,11 @@ def run_baseline_evaluation(
     start_utc = pd.Timestamp(eval_win.get("start_utc", "2018-07-12 00:00:00"), tz="UTC")
     end_utc = pd.Timestamp(eval_win.get("end_utc", "2023-11-09 23:00:00"), tz="UTC")
     cap_denom = float(config.get("metrics", {}).get("capacity_denominator_kwh", 893.0))
+
+    if delay_minutes is None:
+        delay_minutes = int(
+            config.get("operational_timing", {}).get("production_available_delay_minutes", 15)
+        )
 
     # 1. Load hourly dataset
     print(f"Loading hourly dataset from {hourly_path}...")
@@ -243,12 +249,14 @@ def run_baseline_evaluation(
     )
 
     # 3. Build features across the Train/Dev period
-    print("Building feature matrix for Train/Dev window...")
+    print(f"Building feature matrix for Train/Dev window with delay_minutes={delay_minutes}...")
     qh_df = pd.read_parquet(quarter_hourly_path)
+    feat_cfg = {"operational_timing": {"production_available_delay_minutes": delay_minutes}}
     feats_dev = build_features(
         dev_df["interval_start_utc"],
         hourly_df=df_h,
         quarter_hourly_df=qh_df,
+        config=feat_cfg,
     )
     dev_full = pd.concat([dev_df, feats_dev.reset_index(drop=True)], axis=1)
 
@@ -556,5 +564,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--report", default="docs/baseline_report.md", help="Path to output report markdown"
     )
+    parser.add_argument(
+        "--delay",
+        type=int,
+        default=None,
+        help="Production availability delay in minutes (e.g. 0, 15, 60)",
+    )
     args = parser.parse_args()
-    run_baseline_evaluation(config_path=args.config, report_output_path=args.report)
+    run_baseline_evaluation(
+        config_path=args.config,
+        report_output_path=args.report,
+        delay_minutes=args.delay,
+    )

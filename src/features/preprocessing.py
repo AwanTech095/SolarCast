@@ -157,8 +157,9 @@ def build_features(
     ).astype(float)
 
     # 2. Hourly kWh features
-    # Latest fully available hour: [H - 2h, H - 1h)
-    t_h_latest = dt_index - pd.Timedelta(hours=2)
+    # Latest fully available hour: interval starting at H - hours_offset
+    hours_offset = int(np.ceil((delay_min + 60) / 60))
+    t_h_latest = dt_index - pd.Timedelta(hours=hours_offset)
     t_h_prev_day = dt_index - pd.Timedelta(hours=24)
     t_h_prev_week = dt_index - pd.Timedelta(hours=168)
 
@@ -180,8 +181,8 @@ def build_features(
     # The rolling series is computed on hourly dataset, shifted by 2 hours so that
     # at timestamp H, the rolling mean uses timestamps <= H - 2h.
     h_kwh_series = h_work["target_kwh"]
-    roll_6h_series = h_kwh_series.shift(2).rolling(window=6, min_periods=1).mean()
-    roll_24h_series = h_kwh_series.shift(2).rolling(window=24, min_periods=1).mean()
+    roll_6h_series = h_kwh_series.shift(hours_offset).rolling(window=6, min_periods=1).mean()
+    roll_24h_series = h_kwh_series.shift(hours_offset).rolling(window=24, min_periods=1).mean()
 
     roll_6h = roll_6h_series.reindex(dt_index).values
     roll_24h = roll_24h_series.reindex(dt_index).values

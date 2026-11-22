@@ -108,3 +108,22 @@ In Task M1.4, candidate machine learning models (Ridge Regression, HistGradientB
 - **Target Threshold for Candidate Gate:** Model must achieve **$\ge 5\%$ improvement** over the champion baseline on validation daylight MAE:
   $$\text{Target Daylight MAE} \le 71.84 \text{ kWh} \quad (5\% \text{ improvement over } 75.62 \text{ kWh})$$ 
 - **Capacity-Normalized Bound:** Must maintain capacity-normalized daylight MAE $\le 20.0\%$ (baseline is currently at 8.47%).
+
+---
+
+## 5. Operational Latency Sensitivity Analysis (Delay: 0, 15, 60 minutes)
+
+To evaluate the impact of meter telemetry latency on heuristic baseline performance, all three baselines were evaluated across the 3 expanding-window validation folds under three operational delay scenarios: `production_available_delay_minutes` $\in \{0, 15, 60\}$. The operational default is maintained at **15 minutes**.
+
+### Sensitivity Summary Table (3-Fold Mean Daylight MAE)
+
+| Operational Delay | Latest Hour Persistence | Same-Hour Previous Day | Clear-Sky Persistence | Champion Baseline |
+|---|---|---|---|---|
+| **0 minutes** (ideal zero-lag telemetry) | 96.07 kWh (10.76% cap) | 75.54 kWh (8.46% cap) | **42.08 kWh** (4.71% cap) | Clear-Sky Persistence |
+| **15 minutes** (nominal operational default) | 175.73 kWh (19.68% cap) | 75.65 kWh (8.47% cap) | **75.62 kWh** (8.47% cap) | Clear-Sky Persistence |
+| **60 minutes** (conservative telemetry lag) | 175.73 kWh (19.68% cap) | 75.65 kWh (8.47% cap) | **75.62 kWh** (8.47% cap) | Clear-Sky Persistence |
+
+### Observations:
+1. **Zero-Lag Telemetry Boosts Clear-Sky Persistence Dramatically:** If generation telemetry is instantaneously available at issue time $H$ without operational delay ($\text{delay} = 0$), the latest fully available hour is $[H-1\text{h}, H)$ rather than $[H-2\text{h}, H-1\text{h})$. This recency improves Clear-Sky Persistence daylight MAE from 75.62 kWh to 42.08 kWh (a 44.3% error reduction).
+2. **Equivalence of 15m and 60m Delays for Hourly Baselines:** Because an hour $[H-1\text{h}, H)$ is not yet closed at $H-15\text{m}$, the latest fully available closed hour for both 15m and 60m operational delays is identically $[H-2\text{h}, H-1\text{h})$. Consequently, hourly baselines yield identical metrics across 15m and 60m delays.
+3. **Robustness of Same-Hour Previous Day:** The diurnal persistence model is virtually unaffected by near-term meter delay (75.54 kWh vs 75.65 kWh) because its primary signal comes from 24 hours prior.
