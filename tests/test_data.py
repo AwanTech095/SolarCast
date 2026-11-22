@@ -4,8 +4,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.data.aggregation import aggregate_to_hourly, localize_and_convert_to_utc
-from src.data.validation import validate_and_quarantine_raw_generation
+from src.data.aggregation import (
+    aggregate_to_hourly,
+    aggregate_to_quarter_hourly,
+    localize_and_convert_to_utc,
+)
+from src.data.validation import (
+    quarter_hourly_schema,
+    validate_and_quarantine_raw_generation,
+)
 
 _POWER_COL = "meter_revenue_grade_ac_output_meter_149578"
 
@@ -334,3 +341,58 @@ class TestHourlyAggregation:
         # Isolated single zero hour: remains VALID (not in a run of 2+)
         assert h_iso["quality_flag"] == "VALID"
         assert h_iso["target_kwh"] == 0.0
+
+
+class TestQuarterHourlyDataset:
+    """Tests for continuous 15-minute dataset aggregation and schema."""
+
+    def test_aggregate_to_quarter_hourly_synthetic(self) -> None:
+        """Verify continuous 15-minute grid generation and quality flags."""
+        t_base = pd.Timestamp("2022-06-13 12:00:00", tz="UTC")
+        times = pd.date_range(t_base, periods=4, freq="15min", tz="UTC")
+        clean_df = pd.DataFrame({
+            "interval_start_utc": [times[0], times[1], times[3]],  # interval 2 missing
+            "interval_end_utc": [times[0] + pd.Timedelta(minutes=15),
+                                 times[1] + pd.Timedelta(minutes=15),
+                                 times[3] + pd.Timedelta(minutes=15)],
+            _POWER_COL: [100.0, 200.0, 400.0],
+        })
+
+        qh_df = aggregate_to_quarter_hourly(
+            clean_df,
+            power_col=_POWER_COL,
+            start_time_utc=t_base,
+            end_time_utc=t_base + pd.Timedelta(minutes=45),
+        )
+
+        assert len(qh_df) == 4
+        # Validate schema
+        validated = quarter_hourly_schema.validate(qh_df)
+        assert len(validated) == 4
+
+        # Interval 0: valid
+        assert qh_df.iloc[0]["quality_flag"] == "VALID"
+        assert qh_df.iloc[0]["power_kw"] == pytest.approx(100.0)
+
+        # Interval 2: missing
+        assert qh_df.iloc[2]["quality_flag"] == "MISSING_DATA"
+        assert np.isnan(qh_df.iloc[2]["power_kw"])
+
+    def test_quarter_hourly_parquet_on_disk(self) -> None:
+        """Verify the generated quarter_hourly.parquet file on disk."""
+        qh_path = "data/processed/quarter_hourly.parquet"
+        df = pd.read_parquet(qh_path)
+
+        assert len(df) == 240384
+        validated = quarter_hourly_schema.validate(df)
+        assert len(validated) == 240384
+
+        # Check frequency is exactly 15 minutes
+        diffs = df["interval_start_utc"].diff().dropna()
+        assert (diffs == pd.Timedelta(minutes=15)).all()
+
+        # Check quality flags distribution
+        flags = df["quality_flag"].value_counts().to_dict()
+        assert flags["VALID"] > 230000
+        assert flags["SUSPECT_ZERO"] == 1792  # Exactly 448 hours * 4
+        assert flags["MISSING_DATA"] == 323

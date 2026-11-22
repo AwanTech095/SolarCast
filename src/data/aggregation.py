@@ -8,7 +8,11 @@ import pandas as pd
 import pvlib
 import yaml
 
-from src.data.validation import hourly_schema, validate_and_quarantine_raw_generation
+from src.data.validation import (
+    hourly_schema,
+    quarter_hourly_schema,
+    validate_and_quarantine_raw_generation,
+)
 
 
 def localize_and_convert_to_utc(
@@ -199,10 +203,122 @@ def aggregate_to_hourly(
     return hourly_df
 
 
+def aggregate_to_quarter_hourly(
+    clean_df: pd.DataFrame,
+    power_col: str = "meter_revenue_grade_ac_output_meter_149578",
+    site_id: str = "2107",
+    capacity_dc_kw: float = 893.0,
+    capacity_ac_observed_kw: float = 708.48,
+    latitude: float = 38.996306,
+    longitude: float = -122.134111,
+    start_time_utc: pd.Timestamp | None = None,
+    end_time_utc: pd.Timestamp | None = None,
+    output_path: Path | str | None = None,
+    hourly_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Build continuous 15-minute dataset with power (kW) and quality flags.
+
+    Generates a continuous UTC 15-minute grid spanning start_time_utc to end_time_utc.
+    Assigns quality_flag:
+    - 'VALID': interval present and valid
+    - 'MISSING_DATA': interval missing or NaN
+    - 'SUSPECT_ZERO': high_sun (>5 deg) with zero power in a run of suspect zero hours
+
+    Args:
+        clean_df: Validated 15-minute DataFrame with interval_start_utc and power_col.
+        power_col: Column name containing 15-minute average power in kW.
+        site_id: Identifier of the PV site (default '2107').
+        capacity_dc_kw: DC nameplate capacity in kW (default 893.0).
+        capacity_ac_observed_kw: Maximum observed operational AC power in kW (default 708.48).
+        latitude: Plant latitude in decimal degrees.
+        longitude: Plant longitude in decimal degrees.
+        start_time_utc: Optional starting UTC timestamp for grid.
+        end_time_utc: Optional ending UTC timestamp for grid.
+        output_path: Optional path to save quarter_hourly.parquet.
+        hourly_df: Optional aggregated hourly DataFrame for consistent SUSPECT_ZERO flags.
+
+    Returns:
+        Aggregated quarter-hourly DataFrame conforming to quarter_hourly_schema.
+    """
+    df_work = clean_df.copy()
+
+    if start_time_utc is None:
+        start_time_utc = df_work["interval_start_utc"].min().floor("1h")
+    if end_time_utc is None:
+        end_time_utc = df_work["interval_start_utc"].max().floor("1h") + pd.Timedelta(minutes=45)
+
+    full_grid = pd.date_range(start_time_utc, end_time_utc, freq="15min", tz="UTC")
+    grid_df = pd.DataFrame({"interval_start_utc": full_grid})
+
+    merged = grid_df.merge(
+        df_work[["interval_start_utc", power_col]],
+        on="interval_start_utc",
+        how="left",
+    )
+    merged.rename(columns={power_col: "power_kw"}, inplace=True)
+
+    merged["site_id"] = str(site_id)
+    merged["interval_end_utc"] = merged["interval_start_utc"] + pd.Timedelta(minutes=15)
+    merged["capacity_kw"] = float(capacity_dc_kw)
+    merged["capacity_ac_observed_kw"] = float(capacity_ac_observed_kw)
+    merged["latitude"] = float(latitude)
+    merged["longitude"] = float(longitude)
+
+    # Solar position at interval midpoint (interval_start_utc + 7.5m)
+    midpoint_times = merged["interval_start_utc"] + pd.Timedelta(minutes=7.5)
+    sol_pos = pvlib.solarposition.get_solarposition(midpoint_times, latitude, longitude)
+    merged["solar_elevation_deg"] = sol_pos["elevation"].values
+    merged["is_daylight"] = merged["solar_elevation_deg"] > 0.0
+    merged["high_sun"] = merged["solar_elevation_deg"] > 5.0
+
+    # Default quality flag
+    merged["quality_flag"] = np.where(merged["power_kw"].isna(), "MISSING_DATA", "VALID")
+
+    # Flag SUSPECT_ZERO
+    if hourly_df is not None:
+        suspect_hours = set(
+            hourly_df[hourly_df["quality_flag"] == "SUSPECT_ZERO"]["interval_start_utc"]
+        )
+        hour_starts = merged["interval_start_utc"].dt.floor("1h")
+        is_suspect_hour = hour_starts.isin(suspect_hours)
+        merged.loc[is_suspect_hour & (merged["power_kw"] == 0.0), "quality_flag"] = "SUSPECT_ZERO"
+    else:
+        is_candidate = merged["high_sun"] & (merged["power_kw"] == 0.0)
+        # 8 consecutive 15-minute intervals = 2 hours
+        r_sum_prev = is_candidate.rolling(8, min_periods=8).sum() == 8
+        r_sum_next = is_candidate.iloc[::-1].rolling(8, min_periods=8).sum().iloc[::-1] == 8
+        is_suspect = r_sum_prev | r_sum_next
+        merged.loc[is_suspect, "quality_flag"] = "SUSPECT_ZERO"
+
+    final_cols = [
+        "site_id",
+        "interval_start_utc",
+        "interval_end_utc",
+        "power_kw",
+        "capacity_kw",
+        "capacity_ac_observed_kw",
+        "latitude",
+        "longitude",
+        "solar_elevation_deg",
+        "is_daylight",
+        "high_sun",
+        "quality_flag",
+    ]
+    qh_df = merged[final_cols].copy()
+    qh_df = quarter_hourly_schema.validate(qh_df)
+
+    if output_path:
+        out_path = Path(output_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        qh_df.to_parquet(out_path, index=False)
+
+    return qh_df
+
+
 def run_data_pipeline(
     config_path: Path | str = "configs/data.yaml",
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Execute end-to-end validation, quarantine, and hourly aggregation."""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Execute end-to-end validation, quarantine, hourly and quarter-hourly aggregation."""
     with open(config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
@@ -211,6 +327,7 @@ def run_data_pipeline(
     processed_dir = Path(paths.get("processed_dir", "data/processed"))
     quarantine_parquet = processed_dir / "quarantine.parquet"
     hourly_parquet = processed_dir / "hourly.parquet"
+    qh_parquet = processed_dir / "quarter_hourly.parquet"
 
     power_col = "meter_revenue_grade_ac_output_meter_149578"
     capacity_dc_kw = float(config.get("capacity_dc_kw", 893.0))
@@ -257,7 +374,21 @@ def run_data_pipeline(
     )
     print(f"  Aggregated hourly rows: {len(hourly_df):,} (saved to {hourly_parquet})")
 
-    return clean_df_utc, quarantine_df, hourly_df
+    print("Step 3: Building quarter-hourly dataset (kW)...")
+    qh_df = aggregate_to_quarter_hourly(
+        clean_df_utc,
+        power_col=power_col,
+        site_id=site_id,
+        capacity_dc_kw=capacity_dc_kw,
+        capacity_ac_observed_kw=capacity_ac_observed_kw,
+        latitude=lat,
+        longitude=lon,
+        output_path=qh_parquet,
+        hourly_df=hourly_df,
+    )
+    print(f"  Aggregated quarter-hourly rows: {len(qh_df):,} (saved to {qh_parquet})")
+
+    return clean_df_utc, quarantine_df, hourly_df, qh_df
 
 
 if __name__ == "__main__":
