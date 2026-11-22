@@ -33,6 +33,7 @@ mlruns/
 /models/
 /artifacts/
 /logs/
+logs/
 *.log
 
 # Local credentials and infrastructure state

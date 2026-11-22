@@ -1,5 +1,7 @@
 """Unit tests for raw generation data validation, quarantine, and hourly aggregation."""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -8,6 +10,15 @@ from src.data.aggregation import (
     aggregate_to_hourly,
     aggregate_to_quarter_hourly,
     localize_and_convert_to_utc,
+)
+from src.data.hrrr import (
+    HRRR_FEATURE_COLUMNS,
+    HRRRExtractorConfig,
+    extract_hour_weather,
+    find_eligible_run,
+    get_thread_fs,
+    load_coverage_scan_set,
+    merge_parts,
 )
 from src.data.validation import (
     quarter_hourly_schema,
@@ -396,3 +407,149 @@ class TestQuarterHourlyDataset:
         assert flags["VALID"] > 230000
         assert flags["SUSPECT_ZERO"] == 1792  # Exactly 448 hours * 4
         assert flags["MISSING_DATA"] == 323
+
+
+class TestHRRRExtraction:
+    """Unit and regression tests for NOAA HRRR forecast weather extraction pipeline."""
+
+    def test_find_eligible_run_nominal(self) -> None:
+        """Verify nominal run selection when H - 2h is available in scan set."""
+        h = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        nominal_init = pd.Timestamp("2022-06-13 12:00:00", tz="UTC")
+        mock_scan = {nominal_init}
+
+        fs = get_thread_fs()
+        init_time, offset = find_eligible_run(
+            issue_time=h,
+            fs=fs,
+            valid_scan_set=mock_scan,
+            lag_hours=2,
+            max_fallback_hours=6,
+        )
+
+        assert init_time == nominal_init
+        assert offset == 0
+
+    def test_find_eligible_run_fallback(self) -> None:
+        """Verify fallback to earlier run when nominal H - 2h is missing."""
+        h = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        fallback_init = pd.Timestamp("2022-06-13 11:00:00", tz="UTC")  # 3 hours prior (offset 1)
+        mock_scan = {fallback_init}
+
+        fs = get_thread_fs()
+        init_time, offset = find_eligible_run(
+            issue_time=h,
+            fs=fs,
+            valid_scan_set=mock_scan,
+            lag_hours=2,
+            max_fallback_hours=6,
+        )
+
+        assert init_time == fallback_init
+        assert offset == 1
+
+    def test_find_eligible_run_max_fallback_exceeded(self) -> None:
+        """Verify None returned when all runs within max_fallback_hours are missing."""
+        h = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        too_old_init = pd.Timestamp("2022-06-13 04:00:00", tz="UTC")  # 10h prior (exceeds 6+2)
+        mock_scan = {too_old_init}
+
+        fs = get_thread_fs()
+        init_time, offset = find_eligible_run(
+            issue_time=h,
+            fs=fs,
+            valid_scan_set=mock_scan,
+            lag_hours=2,
+            max_fallback_hours=6,
+        )
+
+        assert init_time is None
+        assert offset == -1
+
+    def test_extract_hour_weather_unit_conversion_mocked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify temperature unit conversion (Kelvin to Celsius) and lead averaging."""
+        h = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        init_time = pd.Timestamp("2022-06-13 12:00:00", tz="UTC")
+        mock_scan = {init_time}
+
+        # Mock array returning 300.15 K (F02) and 298.15 K (F03) -> mean 299.15 K = 26.0 C
+        # For cloud cover: 10.0% (F02) and 20.0% (F03) -> mean 15.0%
+        class MockZarrArray:
+            def __getitem__(self, key: tuple[int, int, int]) -> float:
+                lead_idx = key[0]
+                if lead_idx == 1:  # F02 (lead_start 2, index 1)
+                    return 300.15
+                elif lead_idx == 2:  # F03 (lead_end 3, index 2)
+                    return 298.15
+                return 0.0
+
+        monkeypatch.setattr(
+            "src.data.hrrr.get_cached_zarr_array", lambda var_path, fs: MockZarrArray()
+        )
+
+        cfg = HRRRExtractorConfig()
+        fs = get_thread_fs()
+        res = extract_hour_weather(h, cfg, fs, mock_scan)
+
+        assert res["extraction_status"] == "SUCCESS"
+        assert res["fallback_used"] is False
+        assert res["run_age_hours"] == 2.0
+        assert res["tmp_c"] == pytest.approx(26.0)
+        # Check cloud variables also computed
+        assert res["tcdc_pct"] == pytest.approx(299.15)  # mock returned same for all vars
+        # Verify schema columns
+        for col in HRRR_FEATURE_COLUMNS:
+            assert col in res
+
+    def test_merge_parts(self, tmp_path: Path) -> None:
+        """Verify merging of multiple monthly parquet parts."""
+        part1 = tmp_path / "hrrr_features_2023_10.parquet"
+        part2 = tmp_path / "hrrr_features_2023_11.parquet"
+
+        df1 = pd.DataFrame({col: [0.0] for col in HRRR_FEATURE_COLUMNS})
+        df1["site_id"] = "2107"
+        df1["target_start_utc"] = [pd.Timestamp("2023-10-15 12:00:00", tz="UTC")]
+        df1["extraction_status"] = "SUCCESS"
+        df1["fallback_used"] = False
+        df1.to_parquet(part1)
+
+        df2 = pd.DataFrame({col: [0.0] for col in HRRR_FEATURE_COLUMNS})
+        df2["site_id"] = "2107"
+        df2["target_start_utc"] = [pd.Timestamp("2023-11-01 12:00:00", tz="UTC")]
+        df2["extraction_status"] = "SUCCESS"
+        df2["fallback_used"] = False
+        df2.to_parquet(part2)
+
+        merged_file = tmp_path / "merged.parquet"
+        merged_df = merge_parts(parts_dir=tmp_path, output_merged_path=merged_file)
+
+        t1 = pd.Timestamp("2023-10-15 12:00:00", tz="UTC")
+        t2 = pd.Timestamp("2023-11-01 12:00:00", tz="UTC")
+        assert len(merged_df) == 2
+        assert merged_df["target_start_utc"].iloc[0] == t1
+        assert merged_df["target_start_utc"].iloc[1] == t2
+
+    def test_regression_june_week_sample(self) -> None:
+        """Regression test against data/processed/june_week_extracted.parquet."""
+        june_path = Path("data/processed/june_week_extracted.parquet")
+        if not june_path.exists():
+            pytest.skip("june_week_extracted.parquet not found")
+
+        df_june = pd.read_parquet(june_path)
+        df_june_day = df_june[df_june["is_daylight"]].copy().reset_index(drop=True)
+
+        cfg = HRRRExtractorConfig.from_yaml()
+        fs = get_thread_fs()
+        scan_set = load_coverage_scan_set()
+
+        # Check first daylight hour
+        row = df_june_day.iloc[0]
+        t = pd.to_datetime(row["interval_start_utc"], utc=True)
+        res = extract_hour_weather(t, cfg, fs, scan_set)
+
+        assert res["extraction_status"] in ("SUCCESS", "FALLBACK_SUCCESS")
+        assert res["tmp_c"] == pytest.approx(row["forecast_tmp_c"], abs=0.1)
+        assert res["tcdc_pct"] == pytest.approx(row["forecast_tcdc_pct"], abs=0.1)
+
