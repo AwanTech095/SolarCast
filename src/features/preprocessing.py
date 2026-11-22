@@ -125,12 +125,20 @@ def build_features(
     kw_lag30 = qh_work["power_kw"].reindex(t_lag30).values
     kw_lag45 = qh_work["power_kw"].reindex(t_lag45).values
 
-    # Mean of last 4 available intervals (nanmean with fallback to nan if all 4 are nan)
+    # Mean of last 4 available intervals (safely computed without empty slice warnings)
     lags_matrix = np.vstack([kw_lag0, kw_lag15, kw_lag30, kw_lag45])
-    kw_last_4_mean = np.nanmean(lags_matrix, axis=0)
+    valid_count_last_4 = (~np.isnan(lags_matrix)).sum(axis=0)
+    sum_kw_last_4 = np.nansum(lags_matrix, axis=0)
+    kw_last_4_mean = np.full_like(sum_kw_last_4, np.nan, dtype=float)
+    np.divide(
+        sum_kw_last_4,
+        valid_count_last_4,
+        out=kw_last_4_mean,
+        where=valid_count_last_4 > 0,
+    )
 
     # Missing count in last 4 intervals
-    missing_count_last_4 = np.isnan(lags_matrix).sum(axis=0).astype(int)
+    missing_count_last_4 = (4 - valid_count_last_4).astype(int)
 
     # Age in minutes of latest available production reading
     # If lag0 is valid, age is delay_min (15m). If lag0 missing but lag15 valid, 30m, etc.
