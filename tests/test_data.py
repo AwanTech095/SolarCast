@@ -409,6 +409,31 @@ class TestQuarterHourlyDataset:
         assert flags["SUSPECT_ZERO"] == 1792  # Exactly 448 hours * 4
         assert flags["MISSING_DATA"] == 323
 
+    def test_hourly_kwh_equals_sum_of_quarter_hourly_kw(self) -> None:
+        """Verify that hourly kWh equals sum(15-min kW * 0.25) for complete hours."""
+        qh_path = "data/processed/quarter_hourly.parquet"
+        h_path = "data/processed/hourly.parquet"
+        if not Path(qh_path).exists() or not Path(h_path).exists():
+            pytest.skip("Processed datasets not found")
+
+        df_qh = pd.read_parquet(qh_path)
+        df_h = pd.read_parquet(h_path)
+
+        df_qh["hour_start"] = df_qh["interval_start_utc"].dt.floor("h")
+        valid_qh = df_qh[df_qh["quality_flag"] == "VALID"]
+        qh_complete = valid_qh.groupby("hour_start").filter(
+            lambda g: len(g) == 4 and not g["power_kw"].isna().any()
+        )
+        # Sample complete hours across the dataset
+        sample_hours = qh_complete["hour_start"].drop_duplicates().iloc[:500]
+        qh_sample = qh_complete[qh_complete["hour_start"].isin(sample_hours)]
+        qh_sum = qh_sample.groupby("hour_start")["power_kw"].sum() * 0.25
+
+        df_h_valid = df_h.set_index("interval_start_utc")
+        aligned_h = df_h_valid.loc[qh_sum.index, "target_kwh"]
+
+        assert np.allclose(aligned_h.values, qh_sum.values, atol=1e-5)
+
 
 class TestHRRRExtraction:
     """Unit and regression tests for NOAA HRRR forecast weather extraction pipeline."""
