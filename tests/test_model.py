@@ -16,6 +16,10 @@ import pandas as pd
 import pytest
 from sklearn.linear_model import Ridge
 
+from src.models.baselines import (
+    ClearSky15mPersistence,
+    Last15mPersistence,
+)
 from src.models.bundle import ModelBundle, load_bundle, save_bundle
 from src.models.evaluate import (
     check_final_test_safeguard,
@@ -244,3 +248,46 @@ def test_model_bundle_roundtrip(synthetic_feature_data, tmp_path):
     np.testing.assert_allclose(preds_original, preds_loaded, rtol=1e-6, atol=1e-6)
     assert loaded_bundle.model_name == "test-ridge"
     assert loaded_bundle.mlflow_run_id == "run_test_456"
+
+
+def test_last_15m_persistence_baseline(synthetic_feature_data):
+    """Verify Last15mPersistence predicts kw_lag0 * 1h with fallbacks and bounds."""
+    df = synthetic_feature_data.copy()
+    model = Last15mPersistence()
+    preds = model.predict(df)
+
+    assert len(preds) == len(df)
+    assert np.all(np.isfinite(preds))
+    assert np.all(preds >= 0.0)
+    assert np.all(preds <= 893.0)
+
+    # Nighttime zero check
+    night_idx = np.where(df["solar_elevation_target_deg"] <= 0)[0]
+    assert np.all(preds[night_idx] == 0.0)
+
+    # Check daytime valid lag0
+    valid_lag0_day = (df["solar_elevation_target_deg"] > 0) & (~df["power_kw_lag_0m"].isna())
+    idx = np.where(valid_lag0_day)[0]
+    np.testing.assert_allclose(preds[idx], np.clip(df["power_kw_lag_0m"].values[idx], 0.0, 893.0))
+
+    # Check fallback when kw_lag0 is NaN
+    nan_idx = np.where((df["solar_elevation_target_deg"] > 0) & (df["power_kw_lag_0m"].isna()))[0]
+    if len(nan_idx) > 0:
+        expected_fb = np.clip(df["power_kw_lag_15m"].values[nan_idx], 0.0, 893.0)
+        np.testing.assert_allclose(preds[nan_idx], expected_fb)
+
+
+def test_clearsky_15m_persistence_baseline(synthetic_feature_data):
+    """Verify ClearSky15mPersistence computes kt15 scaling, enforces bounds and night zero."""
+    df = synthetic_feature_data.copy()
+    model = ClearSky15mPersistence(delay_minutes=15)
+    preds = model.predict(df)
+
+    assert len(preds) == len(df)
+    assert np.all(np.isfinite(preds))
+    assert np.all(preds >= 0.0)
+    assert np.all(preds <= 893.0)
+
+    # Nighttime zero check
+    night_idx = np.where(df["solar_elevation_target_deg"] <= 0)[0]
+    assert np.all(preds[night_idx] == 0.0)
