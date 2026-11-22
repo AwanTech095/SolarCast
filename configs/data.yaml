@@ -26,8 +26,27 @@ timezone_code: "PST8PDT"
 time_interval_alignment: "L"
 
 # Operational Availability & Forecasting
+weather_availability_lag_hours: 2
+weather_lag_sensitivity_hours: 3
+production_available_delay_minutes: 15
 simulated_weather_lag_days: 14
 weather_lag_sensitivity_days: [7, 14, 30]
+
+# Forecast Weather (NOAA HRRR Archive - Candidate Evaluated in M1.1b)
+hrrr:
+  s3_bucket_grib: "noaa-hrrr-bdp-pds"
+  s3_bucket_zarr: "hrrrzarr"
+  zarr_region: "us-west-1"
+  grid_point:
+    index_x: 198
+    index_y: 642
+    chunk_id: "1.4"
+    in_chunk_x: 48
+    in_chunk_y: 42
+    distance_km: 0.334
+  variables:
+    temperature_2m: "2m_above_ground/TMP/2m_above_ground/TMP"
+    dswrf_surface: "surface/DSWRF/surface/DSWRF"
 
 # Weather Variables (NASA POWER Hourly API)
 weather_parameters:
