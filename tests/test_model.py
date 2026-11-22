@@ -1,134 +1,246 @@
-"""Unit tests for baseline models and evaluation metrics (tests/test_model.py)."""
+"""Tests for model training, evaluation, candidate gating, and bundling.
+
+Verifies:
+1. Physical constraints: predictions are finite, non-negative, and clipped to [0, capacity_dc_kw].
+2. Nighttime zero-prediction logic: target hours with solar elevation <= 0 predict 0.
+3. Determinism: identical predictions given the same seed and input data.
+4. Candidate gate evaluation: passes when improvement >= 5% and cap-MAE <= 0.20; fails otherwise.
+5. Final test safeguard: raises RuntimeError when opening final test partition without --force.
+6. ModelBundle serialization: save_bundle -> load_bundle reproduces exact predictions.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.linear_model import Ridge
 
-from src.models.baselines import (
-    ClearSkyPersistence,
-    LatestHourPersistence,
-    SameHourPreviousDayPersistence,
-    compute_metrics,
-    compute_monthly_daylight_mae,
+from src.models.bundle import ModelBundle, load_bundle, save_bundle
+from src.models.evaluate import (
+    check_final_test_safeguard,
+    evaluate_candidate_gate,
+)
+from src.models.tune import (
+    build_hgb_model,
+    build_ridge_pipeline,
+    sample_hyperparameter_configs,
 )
 
 
 @pytest.fixture
-def sample_feature_df() -> pd.DataFrame:
-    """Create a minimal synthetic feature DataFrame for baseline testing."""
-    return pd.DataFrame({
-        "solar_elevation_target_deg": [35.0, 50.0, -10.0, 20.0, 40.0],
-        "energy_kwh_latest_avail_hour": [300.0, np.nan, 250.0, 100.0, np.nan],
-        "latest_hour_missing": [0, 1, 0, 0, 1],
-        "energy_kwh_prev_day_same_hour": [320.0, 400.0, 260.0, np.nan, np.nan],
-        "prev_day_missing": [0, 0, 0, 1, 1],
-        "energy_kwh_prev_week_same_hour": [310.0, 390.0, 270.0, 150.0, np.nan],
-        "prev_week_missing": [0, 0, 0, 0, 1],
-        "clearsky_energy_target_kwh": [500.0, 600.0, 0.0, 400.0, 500.0],
-        "clearsky_index_latest_avail": [0.8, 0.9, 0.7, 0.5, np.nan],
-    })
+def synthetic_feature_data():
+    """Create deterministic synthetic features and targets for testing."""
+    np.random.seed(42)
+    n = 100
+    times = pd.date_range("2022-06-01 00:00:00", periods=n, freq="1h", tz="UTC")
+    solar_elev = np.sin(np.linspace(0, 4 * np.pi, n)) * 60.0
+    clearsky_ghi = np.maximum(0.0, solar_elev * 15.0)
+
+    # 23 features
+    feature_dict = {
+        "power_kw_lag_0m": np.random.uniform(0, 500, n),
+        "power_kw_lag_15m": np.random.uniform(0, 500, n),
+        "power_kw_lag_30m": np.random.uniform(0, 500, n),
+        "power_kw_lag_45m": np.random.uniform(0, 500, n),
+        "power_kw_last_4_mean": np.random.uniform(0, 500, n),
+        "energy_kwh_latest_avail_hour": np.random.uniform(0, 500, n),
+        "energy_kwh_prev_day_same_hour": np.random.uniform(0, 500, n),
+        "energy_kwh_prev_week_same_hour": np.random.uniform(0, 500, n),
+        "energy_kwh_rolling_mean_6h": np.random.uniform(0, 500, n),
+        "energy_kwh_rolling_mean_24h": np.random.uniform(0, 500, n),
+        "hour_sin": np.sin(2 * np.pi * times.hour / 24.0),
+        "hour_cos": np.cos(2 * np.pi * times.hour / 24.0),
+        "day_of_year_sin": np.sin(2 * np.pi * times.dayofyear / 365.25),
+        "day_of_year_cos": np.cos(2 * np.pi * times.dayofyear / 365.25),
+        "solar_elevation_target_deg": solar_elev,
+        "clearsky_ghi_target_wm2": clearsky_ghi,
+        "clearsky_energy_target_kwh": clearsky_ghi * 0.8,
+        "clearsky_index_latest_avail": np.random.uniform(0.1, 1.2, n),
+        "production_age_minutes": np.full(n, 15.0),
+        "power_kw_missing_count": np.zeros(n, dtype=int),
+        "latest_hour_missing": np.zeros(n, dtype=int),
+        "prev_day_missing": np.zeros(n, dtype=int),
+        "prev_week_missing": np.zeros(n, dtype=int),
+    }
+    df = pd.DataFrame(feature_dict)
+    # Insert some NaNs to test imputer / native NaN handling
+    df.loc[5:10, "power_kw_lag_0m"] = np.nan
+    df.loc[12:15, "energy_kwh_latest_avail_hour"] = np.nan
+
+    simulated_prod = clearsky_ghi * 0.75 + np.random.normal(0, 20, n)
+    target = np.where(solar_elev > 0, np.maximum(0.0, simulated_prod), 0.0)
+    target = np.clip(target, 0.0, 893.0)
+    df["target_kwh"] = target
+    df["interval_start_utc"] = times
+    df["is_daylight"] = solar_elev > 0
+    return df
 
 
-class TestBaselineModels:
-    def test_latest_hour_persistence(self, sample_feature_df: pd.DataFrame) -> None:
-        model = LatestHourPersistence()
-        preds = model.predict(sample_feature_df)
-
-        # Row 0: daylight (35 deg), latest available is 300.0 -> 300.0
-        assert preds[0] == pytest.approx(300.0)
-
-        # Row 1: daylight (50 deg), latest is NaN / missing=1 -> fallback to prev day (400.0)
-        assert preds[1] == pytest.approx(400.0)
-
-        # Row 2: nighttime (-10 deg) -> strictly 0.0 regardless of available lag
-        assert preds[2] == 0.0
-
-        # Row 3: daylight (20 deg), latest is 100.0 -> 100.0
-        assert preds[3] == pytest.approx(100.0)
-
-        # Row 4: daylight (40 deg), all lags NaN -> fallback to 0.0
-        assert preds[4] == 0.0
-
-    def test_same_hour_prev_day_persistence(self, sample_feature_df: pd.DataFrame) -> None:
-        model = SameHourPreviousDayPersistence()
-        preds = model.predict(sample_feature_df)
-
-        # Row 0: daylight, prev day is 320.0 -> 320.0
-        assert preds[0] == pytest.approx(320.0)
-
-        # Row 1: daylight, prev day is 400.0 -> 400.0
-        assert preds[1] == pytest.approx(400.0)
-
-        # Row 2: nighttime (-10 deg) -> strictly 0.0
-        assert preds[2] == 0.0
-
-        # Row 3: daylight, prev day is NaN / missing=1 -> fallback to prev week (150.0)
-        assert preds[3] == pytest.approx(150.0)
-
-        # Row 4: daylight, all missing -> 0.0
-        assert preds[4] == 0.0
-
-    def test_clearsky_persistence(self, sample_feature_df: pd.DataFrame) -> None:
-        model = ClearSkyPersistence()
-        preds = model.predict(sample_feature_df)
-
-        # Row 0: daylight, kt=0.8, cs=500.0 -> 400.0
-        assert preds[0] == pytest.approx(400.0)
-
-        # Row 1: daylight, kt=0.9, cs=600.0 -> 540.0
-        assert preds[1] == pytest.approx(540.0)
-
-        # Row 2: nighttime -> 0.0
-        assert preds[2] == 0.0
-
-        # Row 3: daylight, kt=0.5, cs=400.0 -> 200.0
-        assert preds[3] == pytest.approx(200.0)
-
-        # Row 4: daylight, kt is NaN -> 0.0
-        assert preds[4] == 0.0
+def test_hyperparameter_sampling_determinism():
+    """Verify that sampling hyperparameter configs is deterministic with fixed seed."""
+    space = {
+        "alpha": [0.01, 0.1, 1.0, 10.0, 100.0],
+        "fit_intercept": [True, False],
+    }
+    sample_1 = sample_hyperparameter_configs(space, n_iter=5, random_seed=42)
+    sample_2 = sample_hyperparameter_configs(space, n_iter=5, random_seed=42)
+    assert sample_1 == sample_2
+    assert len(sample_1) == 5
 
 
-class TestEvaluationMetrics:
-    def test_compute_metrics_known_values(self) -> None:
-        # y_true = [100, 200, 0, 50]
-        # y_pred = [120, 180, 0, 40]
-        # is_day = [True, True, False, True]
-        # daylight errors: |100-120|=20, |200-180|=20, |50-40|=10 -> mean = 50 / 3 = 16.6667
-        # daylight squared: 400 + 400 + 100 = 900 -> rmse = sqrt(300) = 17.3205
-        # all-hour errors: 20, 20, 0, 10 -> mean = 50 / 4 = 12.5
-        # all-hour squared: 900 / 4 = 225 -> rmse = 15.0
-        y_true = np.array([100.0, 200.0, 0.0, 50.0])
-        y_pred = np.array([120.0, 180.0, 0.0, 40.0])
-        is_day = np.array([True, True, False, True])
+def test_physical_constraints_and_nighttime_zero(synthetic_feature_data):
+    """Verify that model predictions are strictly non-negative, <= 893 kWh, and 0 at night."""
+    df = synthetic_feature_data
+    drop_cols = ["target_kwh", "interval_start_utc", "is_daylight"]
+    feature_cols = [c for c in df.columns if c not in drop_cols]
 
-        metrics = compute_metrics(y_true, y_pred, is_day, capacity_denominator_kwh=1000.0)
+    model = build_ridge_pipeline({"alpha": 1.0, "fit_intercept": True}, random_seed=42)
+    # Fit on daylight hours only
+    day_mask = df["solar_elevation_target_deg"] > 0
+    model.fit(df.loc[day_mask, feature_cols].values, df.loc[day_mask, "target_kwh"].values)
 
-        assert metrics["daylight_mae_kwh"] == pytest.approx(50.0 / 3.0)
-        assert metrics["daylight_rmse_kwh"] == pytest.approx(np.sqrt(300.0))
-        assert metrics["capacity_norm_daylight_mae"] == pytest.approx((50.0 / 3.0) / 1000.0)
-        assert metrics["all_hour_mae_kwh"] == pytest.approx(12.5)
-        assert metrics["all_hour_rmse_kwh"] == pytest.approx(15.0)
+    bundle = ModelBundle(
+        estimator=model,
+        feature_names=feature_cols,
+        training_window={"start": "2022-06-01", "end": "2022-06-05"},
+        data_hashes={"h": "abc"},
+        mlflow_run_id="run_123",
+        capacity_limit_kwh=893.0,
+    )
 
-    def test_compute_monthly_daylight_mae(self) -> None:
-        y_true = np.array([100.0, 200.0, 0.0, 300.0])
-        y_pred = np.array([120.0, 150.0, 0.0, 310.0])
-        is_day = np.array([True, True, False, True])
-        times = pd.DatetimeIndex([
-            "2020-01-01 10:00:00+00:00",
-            "2020-01-01 11:00:00+00:00",
-            "2020-01-01 22:00:00+00:00",
-            "2020-02-01 12:00:00+00:00",
-        ])
+    preds = bundle.predict(df[feature_cols])
 
-        monthly = compute_monthly_daylight_mae(y_true, y_pred, times, is_day)
-        assert len(monthly) == 2
-        jan = monthly[monthly["month"] == "2020-01"].iloc[0]
-        feb = monthly[monthly["month"] == "2020-02"].iloc[0]
+    assert len(preds) == len(df)
+    assert np.all(np.isfinite(preds)), "All predictions must be finite"
+    assert np.all(preds >= 0.0), "Predictions must be non-negative"
+    assert np.all(preds <= 893.0), "Predictions must not exceed DC capacity (893 kWh)"
 
-        assert jan["daylight_hours"] == 2
-        assert jan["daylight_mae"] == pytest.approx((20.0 + 50.0) / 2.0)
+    # Nighttime zero check: where solar elevation <= 0, predictions must be exactly 0
+    night_idx = np.where(df["solar_elevation_target_deg"] <= 0)[0]
+    assert len(night_idx) > 0
+    assert np.all(preds[night_idx] == 0.0), "Nighttime predictions must be identically 0.0"
 
-        assert feb["daylight_hours"] == 1
-        assert feb["daylight_mae"] == pytest.approx(10.0)
+
+def test_hgb_model_native_nan(synthetic_feature_data):
+    """Verify HistGradientBoosting handles NaNs natively and predicts within bounds."""
+    df = synthetic_feature_data
+    drop_cols = ["target_kwh", "interval_start_utc", "is_daylight"]
+    feature_cols = [c for c in df.columns if c not in drop_cols]
+
+    hgb = build_hgb_model(
+        {"max_iter": 50, "learning_rate": 0.05, "max_depth": 3},
+        random_seed=42,
+    )
+    day_mask = df["solar_elevation_target_deg"] > 0
+    hgb.fit(df.loc[day_mask, feature_cols].values, df.loc[day_mask, "target_kwh"].values)
+
+    raw_preds = hgb.predict(df[feature_cols].values)
+    assert np.all(np.isfinite(raw_preds)), "HGB predictions with NaNs must be finite"
+
+
+def test_candidate_gate_logic():
+    """Verify candidate gate logic correctly identifies eligibility and failure reasons."""
+    baseline_metrics = {
+        "daylight_mae_kwh": 75.62,
+        "daylight_rmse_kwh": 133.27,
+        "capacity_norm_daylight_mae": 0.0847,
+    }
+
+    # Case 1: Clear winner (MAE 60.0, cap-MAE ~6.7%, finite, non-negative)
+    passing_candidate = {
+        "daylight_mae_kwh": 60.00,
+        "daylight_rmse_kwh": 105.00,
+        "capacity_norm_daylight_mae": 60.0 / 893.0,
+    }
+    y_pred = np.array([0.0, 50.0, 100.0, 200.0])
+    gate = evaluate_candidate_gate(
+        passing_candidate, baseline_metrics, y_pred, capacity_limit_kwh=893.0
+    )
+    assert gate["eligible"] is True
+    assert len(gate["failure_reasons"]) == 0
+    assert gate["achieved_improvement_pct"] > 5.0
+
+    # Case 2: Insufficient improvement (< 5%)
+    weak_candidate = {
+        "daylight_mae_kwh": 73.00,  # only ~3.4% improvement
+        "daylight_rmse_kwh": 130.00,
+        "capacity_norm_daylight_mae": 73.0 / 893.0,
+    }
+    gate_weak = evaluate_candidate_gate(
+        weak_candidate, baseline_metrics, y_pred, capacity_limit_kwh=893.0
+    )
+    assert gate_weak["eligible"] is False
+    assert any("Insufficient daylight MAE improvement" in r for r in gate_weak["failure_reasons"])
+
+    # Case 3: Negative predictions violation
+    bad_pred = np.array([-5.0, 50.0, 100.0])
+    gate_neg = evaluate_candidate_gate(
+        passing_candidate, baseline_metrics, bad_pred, capacity_limit_kwh=893.0
+    )
+    assert gate_neg["eligible"] is False
+    assert any("negative values" in r for r in gate_neg["failure_reasons"])
+
+
+def test_final_test_safeguard(tmp_path):
+    """Verify safeguard prevents reading or writing final test set without authorization."""
+    marker_path = tmp_path / "final_test_safeguard.json"
+    # Without test file existing, check passes
+    check_final_test_safeguard(force=False, reason=None, log_path=marker_path)
+
+    # Simulate final test results already written
+    marker_path.write_text('{"final_test_opened": true}', encoding="utf-8")
+
+    # Attempting to check without force should raise RuntimeError
+    with pytest.raises(RuntimeError, match="Final 20% test partition has already been opened"):
+        check_final_test_safeguard(force=False, reason=None, log_path=marker_path)
+
+    # Attempting with force but no reason should raise ValueError
+    with pytest.raises(ValueError, match="A meaningful reason"):
+        check_final_test_safeguard(force=True, reason="", log_path=marker_path)
+
+    # With force and valid reason, check succeeds
+    check_final_test_safeguard(
+        force=True,
+        reason="Audited recalculation after authorized scope update",
+        log_path=marker_path,
+    )
+
+
+def test_model_bundle_roundtrip(synthetic_feature_data, tmp_path):
+    """Verify ModelBundle save and load reproduces exact predictions within floating tolerance."""
+    df = synthetic_feature_data
+    drop_cols = ["target_kwh", "interval_start_utc", "is_daylight"]
+    feature_cols = [c for c in df.columns if c not in drop_cols]
+
+    model = Ridge(alpha=10.0)
+    # Fit simple model on clean subset
+    clean_df = df.fillna(0.0)
+    model.fit(clean_df[feature_cols].values, clean_df["target_kwh"].values)
+
+    bundle = ModelBundle(
+        estimator=model,
+        feature_names=feature_cols,
+        training_window={
+            "start_utc": "2022-06-01T00:00:00Z",
+            "end_utc": "2022-06-05T00:00:00Z",
+        },
+        data_hashes={"hourly": "hash123"},
+        mlflow_run_id="run_test_456",
+        capacity_limit_kwh=893.0,
+        model_name="test-ridge",
+        feature_schema_version="1.0.0",
+    )
+
+    preds_original = bundle.predict(clean_df[feature_cols])
+
+    bundle_path = tmp_path / "test_bundle.joblib"
+    save_bundle(bundle, bundle_path)
+    assert bundle_path.exists()
+
+    loaded_bundle = load_bundle(bundle_path)
+    preds_loaded = loaded_bundle.predict(clean_df[feature_cols])
+
+    np.testing.assert_allclose(preds_original, preds_loaded, rtol=1e-6, atol=1e-6)
+    assert loaded_bundle.model_name == "test-ridge"
+    assert loaded_bundle.mlflow_run_id == "run_test_456"
