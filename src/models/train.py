@@ -47,13 +47,13 @@ DEFAULT_MODELS_DIR = Path("models")
 DEFAULT_PLOTS_DIR = Path("reports/plots")
 
 # Champion baseline reference (3-fold cross-validation, 15m delay)
-BASELINE_CHAMPION_NAME = "Clear-Sky Persistence"
+BASELINE_CHAMPION_NAME = "Clear-Sky Scaled 15-Minute Persistence"
 BASELINE_CHAMPION_METRICS = {
-    "daylight_mae_kwh": 75.6201,
-    "daylight_rmse_kwh": 113.8039,
-    "capacity_norm_daylight_mae": 0.08468,
-    "all_hour_mae_kwh": 37.8680,
-    "all_hour_rmse_kwh": 80.5283,
+    "daylight_mae_kwh": 42.1841,
+    "daylight_rmse_kwh": 67.6055,
+    "capacity_norm_daylight_mae": 0.04724,
+    "all_hour_mae_kwh": 21.1500,
+    "all_hour_rmse_kwh": 47.8138,
 }
 
 
@@ -363,7 +363,8 @@ def run_training_pipeline(
     print("=======================================================")
     print(
         f"Baseline Champion: {BASELINE_CHAMPION_NAME:25s} | "
-        f"Daylight MAE: {BASELINE_CHAMPION_METRICS['daylight_mae_kwh']:.2f} kWh (8.47% cap) | "
+        f"Daylight MAE: {BASELINE_CHAMPION_METRICS['daylight_mae_kwh']:.2f} kWh "
+        f"({BASELINE_CHAMPION_METRICS['capacity_norm_daylight_mae']*100:.2f}% cap) | "
         f"RMSE: {BASELINE_CHAMPION_METRICS['daylight_rmse_kwh']:.2f} kWh"
     )
     for name, rec in benchmark_records.items():

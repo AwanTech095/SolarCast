@@ -2,7 +2,7 @@
 
 **Author**: Member 1 (Data, Features, Models, MLflow)  
 **Date**: November 23, 2026  
-**Commit**: `b829b00` (working tree)  
+**Commit**: `5af9c87` (working tree)  
 **Status**: Complete — Gate Passed (Eligible)
 
 ---
@@ -13,11 +13,12 @@ This report documents the training, hyperparameter optimization, cross-validatio
 
 Evaluation was conducted under strict operational constraints with `production_available_delay_minutes = 15`. Models were trained and evaluated exclusively on the **80% Train/Dev partition** (37,090 hourly intervals: 2018-07-12 00:00 UTC to 2022-10-17 00:00 UTC) across **3 expanding-window chronological folds**. The **final 20% test partition** (9,273 hourly intervals: 2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) remains **strictly locked** (`final_test_opened: false`).
 
-Both candidate models comfortably beat the baseline champion (**Clear-Sky Persistence**, Daylight MAE 75.62 kWh):
-- **Ridge Regression (Pipeline)**: Daylight MAE **43.52 kWh** (4.87% capacity), **42.45% improvement**.
-- **HistGradientBoostingRegressor (Winner)**: Daylight MAE **32.24 kWh** (3.61% capacity), **57.36% improvement**.
+To ensure a fair and rigorous comparison, candidate models are benchmarked against baselines endowed with the **same information set**, specifically incorporating recent 15-minute telemetry:
+- **Baseline Champion**: **Clear-Sky Scaled 15-Minute Persistence** ($kt_{15} \times \text{ClearSky}_{\text{target}}$): Daylight MAE **42.18 kWh** (4.72% capacity), RMSE 67.61 kWh.
+- **Ridge Regression (Pipeline)**: Daylight MAE **43.52 kWh** (4.87% capacity) — achieves a -3.16% change (does not beat the 15-minute scaled baseline, though it beats hourly baselines by 42.45%).
+- **HistGradientBoostingRegressor (Winner)**: Daylight MAE **32.24 kWh** (3.61% capacity), achieving a **23.56% improvement** over the champion baseline.
 
-The candidate gate required $\ge 5.0\%$ daylight MAE improvement over baseline and capacity-normalized daylight MAE $\le 20.0\%$. **HistGradientBoosting** achieved **57.36% improvement** and **3.61% cap-MAE**, passing all gate requirements and being registered as model `solarcast-f1` (version 1) in MLflow.
+The candidate gate requires $\ge 5.0\%$ daylight MAE improvement over the baseline champion ($\le 40.07\text{ kWh}$) and capacity-normalized daylight MAE $\le 20.0\%$. **HistGradientBoosting** achieved **23.56% improvement** and **3.61% cap-MAE**, passing all gate criteria and being registered as model `solarcast-f1` (version 2) in MLflow.
 
 ---
 
@@ -90,50 +91,68 @@ Tuning was conducted over 10 randomized configurations per model across the 3 cr
 
 ---
 
-## 5. Model Validation Benchmark
+## 5. Model Validation Benchmark (Fair Information Set)
 
-The table below summarizes performance across the 3 expanding folds (27,816 validation hours, of which 13,873 are daylight hours):
+To prevent unfair comparisons between models using 15-minute readings and baselines using 2-hour old hourly readings, all five baselines and both candidate models were evaluated on the exact same 3 expanding-window validation folds:
 
-| Model Name | Daylight MAE (kWh) | Daylight RMSE (kWh) | Cap-Norm Daylight MAE | All-Hour MAE (kWh) | All-Hour RMSE (kWh) | Improvement vs Baseline |
+| Model | Daylight MAE (kWh) | Daylight RMSE (kWh) | Cap-Norm Daylight MAE | All-Hour MAE (kWh) | Improvement vs Champion Baseline | Gate Eligibility |
 |---|---|---|---|---|---|---|
-| **Clear-Sky Persistence** (Baseline Champion) | 75.62 | 113.80 | 8.47% | 37.87 | 80.53 | *Reference* |
-| **Ridge Regression** | 43.52 | 64.04 | 4.87% | 21.81 | 45.29 | +42.45% |
-| **HistGradientBoosting** (Winner) | **32.24** | **54.76** | **3.61%** | **16.18** | **38.73** | **+57.36%** |
-
-*Note: All-hour metrics evaluate over all hours (predicting 0.0 at night with zero night error).*
+| **Clear-Sky Scaled 15-Min Persistence** (Baseline Champion) | **42.18** | **67.61** | **4.72%** | **21.15** | *Reference* | N/A |
+| **Last 15-Minute Persistence** | 88.07 | 112.82 | 9.86% | 44.10 | -108.79% | N/A |
+| **Clear-Sky Persistence (Hourly)** | 75.62 | 113.80 | 8.47% | 37.87 | -79.27% | N/A |
+| **Same-Hour Previous Day** | 75.65 | 128.37 | 8.47% | 37.86 | -79.33% | N/A |
+| **Persistence (Latest Available Hour)** | 175.73 | 216.05 | 19.68% | 87.95 | -316.59% | N/A |
+| **Ridge Regression** | 43.52 | 64.04 | 4.87% | 21.81 | -3.16% | REJECTED |
+| **HistGradientBoosting** (Winner) | **32.24** | **54.76** | **3.61%** | **16.18** | **+23.56%** | **ELIGIBLE** |
 
 ### Key Observations:
-1. **HistGradientBoosting Dominance**: Non-linear tree interactions between clear-sky energy, recent 15-minute power slopes, and diurnal harmonics yield a **25.9% error reduction over Ridge** (32.24 kWh vs 43.52 kWh) and **57.36% over Clear-Sky Persistence**.
-2. **Nighttime Zero Guarantee**: Enforcing exact zero for night hours eliminates false nighttime generation, cutting all-hour MAE in half.
-3. **Physical Bound Clipping**: All predictions are clipped to $[0, 893.0\text{ kWh}]$, ensuring 0 negative values and 0 capacity exceedances.
+1. **The Fair Baseline Champion**: Clear-sky scaling of the latest 15-minute reading cuts the persistence baseline error nearly in half (from 75.62 kWh down to 42.18 kWh).
+2. **Linear Ridge Underperforms Non-linear Baseline**: Ridge Regression (43.52 kWh) cannot match the multiplicative interaction of the 15-minute clear-sky baseline (42.18 kWh), failing the gate.
+3. **HistGradientBoosting Wins Decisively**: HistGradientBoosting (32.24 kWh) outperforms the 15-minute clear-sky baseline by **23.56%** (and beats Ridge by 25.9%), proving that gradient boosted trees successfully discover non-linear combinations of recent generation slopes and astronomical coordinates that simple heuristics cannot capture.
 
 ---
 
-## 6. Monthly Performance Breakdown
+## 6. Feature Importance Analysis (Permutation Importance)
+
+Permutation feature importance was evaluated for `HistGradientBoostingRegressor` on the out-of-fold validation sets across all 3 folds (shuffling each feature 5 times and measuring the degradation in Daylight MAE):
+
+| Rank | Feature Name | Daylight MAE Increase (kWh) | Plain-Language Explanation |
+|:---:|---|:---:|---|
+| **1** | `power_kw_lag_0m` | **+116.92** | **Most Recent Inverter Power**: Active power in the 15-minute interval right before cutoff is by far the single most critical predictor. Shuffling it destroys the recent weather/generation baseline, increasing error by 116.9 kWh. |
+| **2** | `hour_sin` | **+40.97** | **Diurnal Cycle Timing**: Captures whether the solar plant is on an upward morning ramp, midday plateau, or evening ramp. |
+| **3** | `energy_kwh_prev_day_same_hour` | **+15.03** | **Yesterday's Generation Baseline**: Provides multi-day weather persistence (e.g. continuous clear summer heat dome vs cloudy monsoon week). |
+| **4** | `clearsky_ghi_target_wm2` | **+11.33** | **Clear-Sky Irradiance Ceiling**: Theoretical astronomical maximum solar irradiance reaching the horizontal plane at target hour midpoint. |
+| **5** | `power_kw_lag_30m` | **+7.67** | **Power Rate-of-Change**: Allows the model to compute recent ramps (cloud incoming vs cloud clearing) across 30 minutes. |
+| **6** | `hour_cos` | **+7.62** | **Diurnal Phase Alignment**: Complements `hour_sin` to resolve exact solar time without ambiguity. |
+| **7** | `energy_kwh_prev_week_same_hour` | **+5.77** | **Seasonal Reference**: Tracks the seasonal shift in generation for that specific solar hour. |
+| **8** | `clearsky_index_latest_avail` | **+3.91** | **Atmospheric Clearness Ratio**: Measures cloud attenuation observed during the last fully available hour. |
+| **9** | `power_kw_lag_15m` | **+2.99** | **Intermediate Lag**: Refines the short-term generation slope between lag 0m and lag 30m. |
+| **10** | `energy_kwh_rolling_mean_24h` | **+2.84** | **Daily Energy Regime**: Quantifies overall plant productivity over the past 24 hours. |
+
+---
+
+## 7. Monthly Performance Breakdown
 
 Validation daylight MAE (kWh) across representative months on the out-of-fold validation set:
 
-| Month | Daylight Hours | Clear-Sky Persistence MAE | Ridge MAE | HistGradientBoosting MAE |
+| Month | Daylight Hours | Clear-Sky 15m Baseline (kWh) | Ridge MAE (kWh) | HistGradientBoosting MAE (kWh) |
 |---|---|---|---|---|
-| 2019-08 | 389 | 49.32 | 27.29 | **18.56** |
-| 2019-12 | 302 | 92.40 | 61.66 | **43.11** |
-| 2020-01 | 276 | 110.15 | 66.62 | **59.66** |
-| 2020-04 | 397 | 85.12 | 48.26 | **37.99** |
-| 2020-07 | 446 | 36.88 | 25.94 | **12.11** |
-| 2021-01 | 294 | 112.44 | 70.70 | **55.07** |
-| 2021-06 | 437 | 42.10 | 35.18 | **19.95** |
-| 2021-12 | 302 | 104.70 | 60.21 | **42.71** |
-| 2022-07 | 447 | 41.50 | 32.33 | **20.36** |
-
-- **Summer Performance**: Exceptional accuracy in June–August (MAE ~12–20 kWh, ~1.4%–2.2% capacity) where clear skies dominate Denver summer days.
-- **Winter Performance**: Higher error in December–February (MAE ~42–60 kWh, ~4.7%–6.7% capacity) driven by cloud cover unpredictability in the absence of numerical weather forecasts. Adding forecast cloud cover (HRRR) is expected to significantly reduce winter errors.
+| 2019-08 | 389 | 24.12 | 27.29 | **18.56** |
+| 2019-12 | 302 | 52.19 | 61.66 | **43.11** |
+| 2020-01 | 276 | 68.45 | 66.62 | **59.66** |
+| 2020-04 | 397 | 45.80 | 48.26 | **37.99** |
+| 2020-07 | 446 | 16.32 | 25.94 | **12.11** |
+| 2021-01 | 294 | 67.80 | 70.70 | **55.07** |
+| 2021-06 | 437 | 25.10 | 35.18 | **19.95** |
+| 2021-12 | 302 | 53.40 | 60.21 | **42.71** |
+| 2022-07 | 447 | 26.50 | 32.33 | **20.36** |
 
 ---
 
-## 7. Acceptance Gate Evaluation (`evaluation.json`)
+## 8. Acceptance Gate Evaluation (`evaluation.json`)
 
 The formal candidate acceptance criteria defined in `configs/evaluation.yaml`:
-1. **Daylight MAE Improvement**: $\ge 5.0\%$ reduction vs baseline champion ($\le 71.84\text{ kWh}$).
+1. **Daylight MAE Improvement**: $\ge 5.0\%$ reduction vs baseline champion ($\le 40.07\text{ kWh}$).
 2. **Capacity-Normalized MAE**: $\le 20.0\%$ (0.20).
 3. **Physical Feasibility**: Strictly finite, non-negative, and $\le 893.0\text{ kWh}$.
 
@@ -142,18 +161,18 @@ The formal candidate acceptance criteria defined in `configs/evaluation.yaml`:
 {
   "eligible": true,
   "required_improvement_pct": 5.0,
-  "achieved_improvement_pct": 57.36,
+  "achieved_improvement_pct": 23.56,
   "thresholds": {
-    "max_daylight_mae_kwh": 71.84,
+    "max_daylight_mae_kwh": 40.07,
     "max_capacity_norm_daylight_mae": 0.2,
     "capacity_limit_kwh": 893.0
   },
   "baseline_metrics": {
-    "daylight_mae_kwh": 75.6201,
-    "daylight_rmse_kwh": 113.8039,
-    "capacity_norm_daylight_mae": 0.0847,
-    "all_hour_mae_kwh": 37.868,
-    "all_hour_rmse_kwh": 80.5283
+    "daylight_mae_kwh": 42.1841,
+    "daylight_rmse_kwh": 67.6055,
+    "capacity_norm_daylight_mae": 0.0472,
+    "all_hour_mae_kwh": 21.15,
+    "all_hour_rmse_kwh": 47.8138
   },
   "candidate_metrics": {
     "daylight_mae_kwh": 32.2446,
@@ -165,14 +184,14 @@ The formal candidate acceptance criteria defined in `configs/evaluation.yaml`:
   "failure_reasons": [],
   "final_test_opened": false,
   "candidate_model_name": "HistGradientBoosting",
-  "baseline_champion_name": "Clear-Sky Persistence"
+  "baseline_champion_name": "Clear-Sky Scaled 15-Minute Persistence"
 }
 ```
 **Gate Decision**: **ELIGIBLE**.
 
 ---
 
-## 8. Diagnostic Plots
+## 9. Diagnostic Plots
 
 Diagnostic artifacts generated and tracked in MLflow (`reports/plots/`):
 - `actual_vs_predicted.png`: Out-of-fold scatter plot showing tight clustering along the 1:1 diagonal with daylight MAE annotation.
@@ -182,10 +201,11 @@ Diagnostic artifacts generated and tracked in MLflow (`reports/plots/`):
 
 ---
 
-## 9. Model Artifacts & MLflow Lineage
+## 10. Model Artifacts & MLflow Lineage
 
 - **MLflow Tracking URI**: `file:./mlruns`
 - **Experiment**: `solarcast-model-training`
-- **Candidate Run**: `HistGradientBoosting_SetA_15mDelay` (`88c574915ce7417c83a4911cc4b1f127`)
-- **Registered Model**: `solarcast-f1` (Version 1, status: `candidate`)
+- **Candidate Run**: `HistGradientBoosting_SetA_15mDelay` (`7b64f8c9349e4943bbeb094672fabb80`)
+- **Registered Model**: `solarcast-f1` (Version 2, status: `candidate`)
+- **Rejected Run**: `Ridge_SetA_15mDelay` (`01f1b17d58694fcf9afc91d071e27e0a`, status: `rejected`, improvement: -3.16%)
 - **Model Bundle**: `models/solarcast_f1_bundle.joblib` (439 KB) containing estimator, feature schema, data hashes, and bounded inference methods.

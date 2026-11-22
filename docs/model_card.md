@@ -70,16 +70,16 @@ The model uses **Feature Set A** (23 features), defined in `configs/feature_sche
 
 Evaluation on the 3-fold chronological cross-validation partition (13,873 daylight validation hours):
 
-| Metric | Candidate (`solarcast-f1`) | Baseline (`Clear-Sky Persistence`) | Improvement |
-|---|---|---|---|
-| **Daylight MAE** | **32.24 kWh** | 75.62 kWh | **+57.36%** |
-| **Daylight RMSE** | **54.76 kWh** | 113.80 kWh | **+51.88%** |
-| **Capacity-Normalized Daylight MAE** | **3.61%** | 8.47% | **-4.86 pp** |
-| **All-Hour MAE** | **16.18 kWh** | 37.87 kWh | **+57.27%** |
-| **All-Hour RMSE** | **38.73 kWh** | 80.53 kWh | **+51.90%** |
+| Metric | Candidate (`solarcast-f1`) | Champion Baseline (`Clear-Sky Scaled 15-Min Persistence`) | Hourly Baseline (`Clear-Sky Persistence`) | Improvement vs Champion Baseline |
+|---|---|---|---|---|
+| **Daylight MAE** | **32.24 kWh** | 42.18 kWh | 75.62 kWh | **+23.56%** |
+| **Daylight RMSE** | **54.76 kWh** | 67.61 kWh | 113.80 kWh | **+19.01%** |
+| **Capacity-Normalized Daylight MAE** | **3.61%** | 4.72% | 8.47% | **-1.11 pp** |
+| **All-Hour MAE** | **16.18 kWh** | 21.15 kWh | 37.87 kWh | **+23.50%** |
+| **All-Hour RMSE** | **38.73 kWh** | 47.81 kWh | 80.53 kWh | **+18.99%** |
 
 ### Acceptance Gate Status:
-- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (57.36%)
+- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (23.56% vs 42.18 kWh champion baseline; threshold $\le 40.07$ kWh)
 - Capacity-Normalized Daylight MAE $\le 20.0\%$: **PASSED** (3.61%)
 - Non-negative, finite, bounded outputs: **PASSED** (0 violations)
 - Gate Decision: **ELIGIBLE** (recorded in `reports/evaluation.json` and `./evaluation.json`).
@@ -102,5 +102,5 @@ Evaluation on the 3-fold chronological cross-validation partition (13,873 daylig
 
 1. **Single Site Calibration**: Trained exclusively on PVDAQ Site 2107 in Denver, CO. Direct transfer to coastal, tropical, or high-humidity climates requires recalibration.
 2. **Missing Weather Forecasts**: Feature Set A relies on production lags and clear-sky models without numerical weather predictions (NWP). Integrating HRRR forecast cloud cover (TCDC/LCDC/MCDC/HCDC) and 2m temperature will address cloud passage dynamics.
-3. **Data Quality Dependency**: Degradation occurs if telemetry exceeds the 15-minute cutoff or if prolonged inverter outages occur (indicated by `power_kw_missing_count > 0` and missingness flags).
+3. **Data Quality Dependency**: Degradation occurs if telemetry exceeds the 15-minute cutoff or if prolonged inverter outages occur (indicated by `power_kw_missing_count > 0` and missingness flags). Evaluation results depend directly on the assumed operational meter availability delay: under zero delay (0 min), 15-minute delay (default operational assumption), and 60-minute delay, the champion baseline achieves Daylight MAEs of 33.09 kWh (3.71% capacity), 42.18 kWh (4.72% capacity), and 67.50 kWh (7.56% capacity), respectively.
 4. **Final Test Partition Reserve**: The reported metrics are out-of-fold cross-validation estimates. Final test set metrics remain sealed until final team sign-off.

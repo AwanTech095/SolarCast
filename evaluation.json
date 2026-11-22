@@ -1,18 +1,18 @@
 {
   "eligible": true,
   "required_improvement_pct": 5.0,
-  "achieved_improvement_pct": 57.36,
+  "achieved_improvement_pct": 23.56,
   "thresholds": {
-    "max_daylight_mae_kwh": 71.84,
+    "max_daylight_mae_kwh": 40.07,
     "max_capacity_norm_daylight_mae": 0.2,
     "capacity_limit_kwh": 893.0
   },
   "baseline_metrics": {
-    "daylight_mae_kwh": 75.6201,
-    "daylight_rmse_kwh": 113.8039,
-    "capacity_norm_daylight_mae": 0.0847,
-    "all_hour_mae_kwh": 37.868,
-    "all_hour_rmse_kwh": 80.5283
+    "daylight_mae_kwh": 42.1841,
+    "daylight_rmse_kwh": 67.6055,
+    "capacity_norm_daylight_mae": 0.0472,
+    "all_hour_mae_kwh": 21.15,
+    "all_hour_rmse_kwh": 47.8138
   },
   "candidate_metrics": {
     "daylight_mae_kwh": 32.2446,
@@ -24,5 +24,5 @@
   "failure_reasons": [],
   "final_test_opened": false,
   "candidate_model_name": "HistGradientBoosting",
-  "baseline_champion_name": "Clear-Sky Persistence"
+  "baseline_champion_name": "Clear-Sky Scaled 15-Minute Persistence"
 }
