@@ -188,7 +188,7 @@ Physical and meteorological validation thresholds for HRRR forecast features:
 During data auditing, exactly one record was found with an out-of-range value:
 - **Issue Time:** `2020-07-29 21:00:00+00:00` (target hour `21:00:00` to `22:00:00` UTC)
 - **Extracted Values:** `tmp_c = 34.1` $^\circ\text{C}$, `tcdc_pct = -10000.0` %, `extraction_status = SUCCESS:tmp,tcdc`
-- **Cause:** Upstream missing/fill value sentinel (`-10000`) embedded in the MesoWest HRRR Zarr array for entire atmosphere total cloud cover.
+- **Observed Value:** The value `-10000.0` is observed in the raw data row, consistent with an upstream missing/fill sentinel value in the MesoWest HRRR Zarr array.
 
 ### 6.3 Handling in Feature Engineering Pipeline
 The feature extraction code in `src/features/preprocessing.py` treats any `tcdc_pct` outside $[0, 100]$ or `tmp_c` outside $[-40, 60]$ as `NaN`:

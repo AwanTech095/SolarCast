@@ -25,7 +25,7 @@ This document reports the official, one-time final evaluation of SolarCast Mode 
    - **Improvement vs Baseline Champion**: Beats the champion baseline (`Clear_Sky_Scaled_15m_Persistence`, 43.48 kWh MAE) by **+24.83%** (exceeding the 5.0% course gate by nearly $5\times$).
    - **Improvement vs Feature Set A**: Beats the weather-free model (`HistGradientBoosting_Set_A`, 33.99 kWh MAE) by **+1.31 kWh (+3.84% relative gain)**, confirming that forecast weather provides authentic, generalized predictive skill on unseen data.
 2. **All Daylight Hours Resilience ($N = 4,601$)**:
-   - Evaluated across all daylight hours, including 214 hours where forecast weather was unavailable (due to upstream archive outages), `HistGradientBoosting_Set_B` achieves **33.48 kWh Daylight MAE** (**3.75% capacity-normalized MAE**), outperforming the baseline champion by **+24.33%** and Set A by **+3.46%**.
+   - Evaluated across all daylight hours, including 214 hours where forecast weather was unavailable (cause unknown; observed only as missing files/chunks in the archive), `HistGradientBoosting_Set_B` achieves **33.48 kWh Daylight MAE** (**3.75% capacity-normalized MAE**), outperforming the baseline champion by **+24.33%** and Set A by **+3.46%**.
 3. **Generalization Gap**:
    - The test Daylight MAE of `HistGradientBoosting_Set_B` (32.69 kWh) degrades by only **+1.26 kWh (+4.01%)** compared to its 3-fold cross-validation performance on Train/Dev (31.43 kWh). This is the smallest generalization gap among all evaluated machine learning models.
 
@@ -39,13 +39,13 @@ The evaluation window was determined by reserving the latest 20% of valid chrono
 |---|:---:|:---:|---|
 | **Total Test Calendar Window** | **9,335** | 100.00% | Hourly intervals from `2022-10-17 01:00 UTC` to `2023-11-09 23:00 UTC`. |
 | **Excluded Test Hours** | **62** | 0.66% | Removed per quality assurance criteria before evaluation. |
-| — *Suspect Zero Outages (`SUSPECT_ZERO`)* | *35* | *0.37%* | Daytime hours with solar elevation $> 5^\circ$ where meter reported persistent $0.0\text{ kW}$ generation, indicative of site-wide inverter trips, disconnects, or utility curtailment. |
+| — *Suspect Zero Outages (`SUSPECT_ZERO`)* | *35* | *0.37%* | Daytime hours with solar elevation $> 5^\circ$ where meter reported persistent $0.0\text{ kW}$ generation (cause unknown; observed only as persistent zero daytime generation during periods with solar elevation $> 5^\circ$). |
 | — *Missing Plant Telemetry (`MISSING_DATA`)* | *27* | *0.29%* | Hours with fewer than 4 valid 15-minute telemetry intervals. |
 | **Valid Evaluated Test Hours** | **9,273** | 99.34% | Clean test dataset evaluated across all models. |
 | **Nighttime Hours ($\le 0^\circ$ solar elevation)** | **4,672** | 50.38% | Deterministically predicted as $0.0\text{ kWh}$ across all models. |
 | **Total Daylight Hours ($> 0^\circ$ solar elevation)** | **4,601** | 49.62% | Daylight hours subject to solar generation forecasting. |
 | — *Primary Daylight Hours (Weather Available)* | **4,387** | 95.35% | Daylight hours with valid NOAA HRRR forecast data ($H - 2\text{h}$ operational latency). |
-| — *Daylight Hours Missing Weather* | **214** | 4.65% | Daylight hours lacking weather (including 101 hours during the August 2023 MesoWest outage). |
+| — *Daylight Hours Missing Weather* | **214** | 4.65% | Daylight hours lacking weather (including 101 daylight hours from the 2023-08-16 to 2023-08-23 period: cause unknown; observed only as missing files/chunks in the archive). |
 
 ---
 
@@ -122,7 +122,7 @@ To evaluate where numerical weather forecasts provide the highest marginal value
    - Feature Set B achieves **51.64 kWh MAE**, beating Set A by **+2.98 kWh (+5.46%)** and beating the baseline champion by **+7.23 kWh (+12.28%)**. Strong, widespread synoptic storm systems are reliably detected in advance by the HRRR model, suppressing false high-generation predictions that plague persistence models.
 3. **Broken / Mixed Cloud (`20% - 80%` TCDC, 13.2% of hours)**:
    - Feature Set B exhibits a minor degradation of **-1.81 kWh (-3.21%)** relative to Set A (58.16 kWh vs 56.35 kWh).
-   - **Root Cause**: This replicates the exact physical phenomenon identified during cross-validation (where Set B was -9.70% worse in mixed clouds). In convective, broken cumulus regimes, a 3-km NWP grid cell experiences spatial-temporal phase errors: a cloud may arrive 30 minutes earlier or later than simulated. The plant's 15-minute telemetry in Set A senses immediate ground shading, while NWP can misguide the tree splits. However, on the test set this degradation was much smaller (-3.21% vs -9.70%), and is far outweighed by the 6.15% gain across the majority 63.4% clear-sky regime.
+   - **Hypothesis**: timing errors of forecast cloud on broken cloud; not tested. In broken cloud regimes, a 3-km NWP grid cell may experience spatial-temporal phase timing errors (e.g. cloud passage simulated earlier or later than actual arrival at the array). Set A's recent 15-minute telemetry senses immediate ground-level conditions, whereas mistimed NWP cloud signals can misguide tree splits. However, on the test set this difference was smaller (-3.21% vs -9.70% on validation), and is balanced by the 6.15% gain across the majority 63.4% clear-sky regime.
 
 ---
 
@@ -149,7 +149,7 @@ Monthly daylight MAE breakdown on the test partition (October 2022 to November 2
 
 ### Monthly Trends
 - **Consistency**: Feature Set B outperforms Feature Set A in **12 out of 14 test months** (85.7% of calendar months).
-- **Winter Storm Skill**: Massive gains occur during severe winter atmospheric river events (e.g. November 2023: **+11.81%**; December 2022: **+7.16%**; January 2023: **+6.77%**; March 2023: **+6.35%**). During these heavy frontal passages, persistence baselines degrade severely (MAE $> 60\text{ kWh}$), whereas HRRR NWP signals alert the model to widespread cloud deck formation hours before arrival.
+- **Winter Months**: Substantial gains occur during overcast winter months (e.g. November 2023: **+11.81%**, note small sample of 79 daylight hours; December 2022: **+7.16%**; January 2023: **+6.77%**; March 2023: **+6.35%**). During these overcast periods, persistence baselines degrade (MAE $> 60\text{ kWh}$), whereas HRRR NWP signals alert the model to cloud deck formation hours before arrival.
 - **Summer Stability**: During clear summer months (June–September), Daylight MAE remains stable at **19.5–26.2 kWh** (~2.2%–2.9% capacity).
 
 ---
@@ -167,25 +167,25 @@ The generalization gap measures the difference in performance between the 3-fold
 | **HistGradientBoosting Set B (Champion)** | **31.43** | **32.69** | **+1.26** | **+4.01%** |
 
 ### Assessment of Overfitting & Model Stability
-- **Minimal Gap**: Champion model `HistGradientBoosting_Set_B` exhibits a generalization gap of only **+1.26 kWh (+4.01%)**. This confirms that the hyperparameter tuning (`l2_regularization=1.0`, `min_samples_leaf=100`, `learning_rate=0.05`) achieved excellent regularization, avoiding overfitting on the training partition.
-- **Superiority Over Set A**: The generalization gap of Set B (+1.26 kWh / 4.01%) is smaller than Set A (+1.75 kWh / 5.44%), demonstrating that weather features actually stabilize out-of-sample predictions rather than introducing spurious variance.
+- **Minimal Gap**: Champion model `HistGradientBoosting_Set_B` exhibits a generalization gap of **+1.26 kWh (+4.01%)**. This confirms that hyperparameter tuning on the training partition avoided severe overfitting.
+- **Model Comparison**: The validation-to-test gap is +1.26 kWh (+4.01%) for HGB B, +1.75 kWh (+5.44%) for HGB A, and +1.39 kWh (+3.31%) for the baseline champion; differences are small.
 - **Linear Model Degradation**: Ridge regression showed larger degradation (+6.27% to +7.79%), confirming that non-linear gradient boosted trees handle seasonal interactions and solar geometry far more effectively.
 
 ---
 
-## 7. Analysis of Missing Weather (August 2023 Outage)
+## 7. Analysis of Missing Weather
 
 In the test partition, **214 daylight hours** (4.65% of total daylight hours) lacked valid forecast weather:
-- **Major Event**: 101 contiguous daylight hours occurred between `2023-08-16 15:00 UTC` and `2023-08-23 22:00 UTC` due to a verified public archive outage on the NOAA MesoWest Zarr endpoint.
-- **Scattered Hours**: The remaining 113 hours were isolated 1-to-2 hour data ingest delays or network drops.
+- **Contiguous August 2023 Gap**: 101 contiguous daylight hours occurred between `2023-08-16 15:00 UTC` and `2023-08-23 22:00 UTC` (cause unknown; observed only as missing files/chunks in the archive).
+- **Scattered Missing Hours**: The remaining 113 daylight hours were scattered 1-to-2 hour periods (cause unknown; observed only as missing files/chunks in the archive).
 
-### Pipeline Resilience Under Outages
+### Pipeline Resilience Under Missing Weather
 - In operational deployment, when forecast weather is unavailable, `HistGradientBoosting_Set_B` utilizes scikit-learn's built-in **native NaN histogram binning**, routing missing values to default split directions learned during training.
-- Comparing results:
-  - Weather Present ($N = 4,387$): Daylight MAE = **32.69 kWh**
-  - All Daylight ($N = 4,601$): Daylight MAE = **33.48 kWh**
-  - Delta: **+0.79 kWh**.
-- Even with 214 missing hours included, Set B maintains a **24.33% improvement** over the baseline champion (44.24 kWh) and beats Set A (34.68 kWh) by **3.46%**. The model does not crash, does not require synthetic imputed artifacts, and degrades smoothly.
+- Comparing subsets:
+  - Primary daylight (weather present, $N = 4,387$): Set B Daylight MAE = **32.69 kWh** (vs Set A 33.99 kWh).
+  - All daylight ($N = 4,601$): Set B Daylight MAE = **33.48 kWh** (vs Set A 34.68 kWh).
+  - Shift: **+0.79 kWh** for Set B, while Set A (which does not use weather at all) shows **+0.69 kWh** between the same subsets (33.99 to 34.68 kWh). The shift reflects differing hour subsets rather than a pure degradation from missing weather alone.
+- Across the full 4,601 daylight hours, Set B maintains a **24.33% improvement** over the baseline champion (44.24 kWh) and beats Set A (34.68 kWh) by **3.46%** with native NaN handling.
 
 ---
 
