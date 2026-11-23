@@ -1,7 +1,8 @@
-"""Model packaging and artifact bundling for SolarCast (Task M1.5 / Step 5).
+"""Model packaging and artifact bundling for SolarCast (Task M1.5 / Step 4 & 5).
 
 Provides `ModelBundle`, `save_bundle`, and `load_bundle` to persist trained estimators
 with preprocessing, ordered feature schemas, data hashes, and strict physical constraints.
+Supports Feature Set A and Feature Set B (with weather features).
 """
 
 from __future__ import annotations
@@ -31,37 +32,52 @@ class ModelBundle:
     mlflow_run_id: str | None
     capacity_limit_kwh: float = DEFAULT_CAPACITY_LIMIT_KWH
     model_name: str = "solarcast-f1"
-    feature_schema_version: str = "1.0.0"
+    feature_schema_version: str = "1.1.0"
+    feature_set: str = "A"
+    needs_weather: bool = False
     created_at_utc: str = ""
 
     def __post_init__(self) -> None:
         if not self.created_at_utc:
             self.created_at_utc = datetime.datetime.now(datetime.UTC).isoformat()
+        if not self.needs_weather and self.feature_set == "B":
+            self.needs_weather = True
 
-    def predict(self, features_df: pd.DataFrame) -> np.ndarray:
+    def predict(
+        self,
+        features_df: pd.DataFrame,
+        weather_df: pd.DataFrame | None = None,
+    ) -> np.ndarray:
         """Generate physically constrained predictions from input features.
 
         Args:
             features_df: DataFrame containing required feature columns.
+            weather_df: Optional DataFrame containing weather features to merge.
 
         Returns:
             1D numpy array of predicted energy in kWh, clipped to [0, capacity]
             with nighttime hours forced strictly to 0.0.
         """
+        df = features_df.copy()
+        if weather_df is not None:
+            for col in self.feature_names:
+                if col not in df.columns and col in weather_df.columns:
+                    df[col] = weather_df[col]
+
         # Validate that all required features are present
-        missing = [f for f in self.feature_names if f not in features_df.columns]
+        missing = [f for f in self.feature_names if f not in df.columns]
         if missing:
             raise KeyError(f"Input features missing required columns: {missing}")
 
-        X = features_df[self.feature_names].values
+        X = df[self.feature_names].values
 
         # Determine daylight condition (solar elevation > 0)
-        if "solar_elevation_target_deg" in features_df.columns:
-            is_daylight = (features_df["solar_elevation_target_deg"] > 0.0).values
-        elif "is_daylight" in features_df.columns:
-            is_daylight = features_df["is_daylight"].values.astype(bool)
+        if "solar_elevation_target_deg" in df.columns:
+            is_daylight = (df["solar_elevation_target_deg"] > 0.0).values
+        elif "is_daylight" in df.columns:
+            is_daylight = df["is_daylight"].values.astype(bool)
         else:
-            is_daylight = np.ones(len(features_df), dtype=bool)
+            is_daylight = np.ones(len(df), dtype=bool)
 
         raw_preds = self.estimator.predict(X)
         preds = np.asarray(raw_preds, dtype=float).ravel()

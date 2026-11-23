@@ -1,0 +1,2083 @@
+{
+  "primary_results": {
+    "Baseline_Champion": {
+      "mae": 42.08905738137258,
+      "rmse": 67.52373925799225,
+      "cap_norm_mae": 4.713220311463894,
+      "n": 13374
+    },
+    "Ridge_Set_A": {
+      "mae": 43.61105786556061,
+      "rmse": 64.1655955073264,
+      "cap_norm_mae": 4.883657095807459,
+      "n": 13374
+    },
+    "HGB_Set_A": {
+      "mae": 32.23875538202052,
+      "rmse": 54.88488993988032,
+      "cap_norm_mae": 3.6101629767100247,
+      "n": 13374
+    },
+    "Ridge_Set_B": {
+      "mae": 42.62262784727765,
+      "rmse": 62.292445875590175,
+      "cap_norm_mae": 4.772970643592122,
+      "n": 13374
+    },
+    "HGB_Set_B": {
+      "mae": 31.426163744452307,
+      "rmse": 53.35108459582238,
+      "cap_norm_mae": 3.51916727261504,
+      "n": 13374
+    }
+  },
+  "all_results": {
+    "Baseline_Champion": {
+      "mae": 42.17662409973313,
+      "rmse": 67.61818074934122,
+      "cap_norm_mae": 4.7230262149757145,
+      "n": 13914
+    },
+    "Ridge_Set_A": {
+      "mae": 43.50101069907427,
+      "rmse": 64.07243253941503,
+      "cap_norm_mae": 4.871333784890735,
+      "n": 13914
+    },
+    "HGB_Set_A": {
+      "mae": 32.243991043646396,
+      "rmse": 54.827629803740145,
+      "cap_norm_mae": 3.610749277004076,
+      "n": 13914
+    },
+    "Ridge_Set_B": {
+      "mae": 42.65963401499997,
+      "rmse": 62.309028605281455,
+      "cap_norm_mae": 4.777114671332583,
+      "n": 13914
+    },
+    "HGB_Set_B": {
+      "mae": 31.534695396749168,
+      "rmse": 53.370756067010284,
+      "cap_norm_mae": 3.531320873096212,
+      "n": 13914
+    }
+  },
+  "cloud_bins": {
+    "Clear / Low Cloud (<20%)": {
+      "n_hours": 9843,
+      "mae_base": 36.66210652230517,
+      "mae_a": 25.546262792246768,
+      "mae_b": 24.11943580612535
+    },
+    "Mixed / Mid Cloud (20-80%)": {
+      "n_hours": 1664,
+      "mae_base": 59.768168011033836,
+      "mae_a": 49.45879511990079,
+      "mae_b": 54.258275956919974
+    },
+    "Overcast / High Cloud (>80%)": {
+      "n_hours": 1867,
+      "mae_base": 54.943603293554766,
+      "mae_a": 52.174512445389716,
+      "mae_b": 49.59835891071162
+    }
+  },
+  "monthly_comp": [
+    {
+      "month": "2019-08",
+      "daylight_hours": 371,
+      "mae_base": 32.07025013334761,
+      "mae_a": 19.343308959587006,
+      "mae_b": 19.15150938365203,
+      "diff_b_vs_a": 0.19179957593497576,
+      "diff_pct": 0.9915551487891389
+    },
+    {
+      "month": "2019-09",
+      "daylight_hours": 365,
+      "mae_base": 37.68043282682902,
+      "mae_a": 33.92476209705012,
+      "mae_b": 32.275094091329535,
+      "diff_b_vs_a": 1.649668005720585,
+      "diff_pct": 4.862725347937015
+    },
+    {
+      "month": "2019-10",
+      "daylight_hours": 319,
+      "mae_base": 38.27850487091705,
+      "mae_a": 31.08422555709448,
+      "mae_b": 30.32177379556974,
+      "diff_b_vs_a": 0.7624517615247406,
+      "diff_pct": 2.452857511679982
+    },
+    {
+      "month": "2019-11",
+      "daylight_hours": 269,
+      "mae_base": 42.37233881122512,
+      "mae_a": 36.14999551471506,
+      "mae_b": 32.665487437730654,
+      "diff_b_vs_a": 3.4845080769844046,
+      "diff_pct": 9.639027688305013
+    },
+    {
+      "month": "2019-12",
+      "daylight_hours": 302,
+      "mae_base": 43.14188380281714,
+      "mae_a": 43.651576353190485,
+      "mae_b": 41.22430096690813,
+      "diff_b_vs_a": 2.4272753862823535,
+      "diff_pct": 5.5605675420355
+    },
+    {
+      "month": "2020-01",
+      "daylight_hours": 276,
+      "mae_base": 61.771332294388124,
+      "mae_a": 58.84986144971282,
+      "mae_b": 57.46723991800659,
+      "diff_b_vs_a": 1.3826215317062278,
+      "diff_pct": 2.3494049053754824
+    },
+    {
+      "month": "2020-02",
+      "daylight_hours": 290,
+      "mae_base": 49.09983315974058,
+      "mae_a": 44.34422025718702,
+      "mae_b": 43.33678856080979,
+      "diff_b_vs_a": 1.0074316963772318,
+      "diff_pct": 2.2718444264761968
+    },
+    {
+      "month": "2020-03",
+      "daylight_hours": 361,
+      "mae_base": 51.495213995402366,
+      "mae_a": 50.371110706377834,
+      "mae_b": 45.71083208558465,
+      "diff_b_vs_a": 4.660278620793186,
+      "diff_pct": 9.251887749624538
+    },
+    {
+      "month": "2020-04",
+      "daylight_hours": 397,
+      "mae_base": 46.893211174396846,
+      "mae_a": 38.59332552742304,
+      "mae_b": 37.0892532301279,
+      "diff_b_vs_a": 1.5040722972951386,
+      "diff_pct": 3.8972342412586305
+    },
+    {
+      "month": "2020-05",
+      "daylight_hours": 434,
+      "mae_base": 42.95500659029681,
+      "mae_a": 34.11472669713825,
+      "mae_b": 35.16902563248532,
+      "diff_b_vs_a": -1.0542989353470702,
+      "diff_pct": -3.0904510673846644
+    },
+    {
+      "month": "2020-06",
+      "daylight_hours": 365,
+      "mae_base": 44.849153143557544,
+      "mae_a": 28.087741551461864,
+      "mae_b": 27.66589320035006,
+      "diff_b_vs_a": 0.4218483511118052,
+      "diff_pct": 1.5018948758799353
+    },
+    {
+      "month": "2020-07",
+      "daylight_hours": 444,
+      "mae_base": 29.772011931959707,
+      "mae_a": 11.983865230035406,
+      "mae_b": 11.361634188713335,
+      "diff_b_vs_a": 0.6222310413220704,
+      "diff_pct": 5.1922399774870645
+    },
+    {
+      "month": "2020-08",
+      "daylight_hours": 407,
+      "mae_base": 38.69468470291597,
+      "mae_a": 24.349376410601824,
+      "mae_b": 25.319075730720023,
+      "diff_b_vs_a": -0.9696993201181989,
+      "diff_pct": -3.982440058284152
+    },
+    {
+      "month": "2020-09",
+      "daylight_hours": 349,
+      "mae_base": 26.925390568870725,
+      "mae_a": 25.57723549866918,
+      "mae_b": 26.81544051175625,
+      "diff_b_vs_a": -1.2382050130870716,
+      "diff_pct": -4.8410431735341275
+    },
+    {
+      "month": "2020-10",
+      "daylight_hours": 314,
+      "mae_base": 24.70618575116105,
+      "mae_a": 25.555013700969614,
+      "mae_b": 24.690962520066392,
+      "diff_b_vs_a": 0.8640511809032212,
+      "diff_pct": 3.381141528679506
+    },
+    {
+      "month": "2020-11",
+      "daylight_hours": 278,
+      "mae_base": 49.00026668604757,
+      "mae_a": 38.220643840131125,
+      "mae_b": 36.561638215821965,
+      "diff_b_vs_a": 1.6590056243091595,
+      "diff_pct": 4.340600936102566
+    },
+    {
+      "month": "2020-12",
+      "daylight_hours": 301,
+      "mae_base": 51.68970678143905,
+      "mae_a": 40.24345959714616,
+      "mae_b": 38.587335067160325,
+      "diff_b_vs_a": 1.6561245299858385,
+      "diff_pct": 4.115263813211728
+    },
+    {
+      "month": "2021-01",
+      "daylight_hours": 294,
+      "mae_base": 57.9513149528931,
+      "mae_a": 53.80342607874354,
+      "mae_b": 52.78712194547711,
+      "diff_b_vs_a": 1.0163041332664307,
+      "diff_pct": 1.8889208500942438
+    },
+    {
+      "month": "2021-02",
+      "daylight_hours": 301,
+      "mae_base": 56.64561563120463,
+      "mae_a": 45.054789514626194,
+      "mae_b": 42.6629096258032,
+      "diff_b_vs_a": 2.3918798888229915,
+      "diff_pct": 5.308824909827872
+    },
+    {
+      "month": "2021-03",
+      "daylight_hours": 362,
+      "mae_base": 51.58328943247009,
+      "mae_a": 44.62046790722773,
+      "mae_b": 44.04764678197067,
+      "diff_b_vs_a": 0.5728211252570574,
+      "diff_pct": 1.2837631520315602
+    },
+    {
+      "month": "2021-04",
+      "daylight_hours": 223,
+      "mae_base": 45.27710113772743,
+      "mae_a": 31.505060402669937,
+      "mae_b": 31.020957158420142,
+      "diff_b_vs_a": 0.4841032442497948,
+      "diff_pct": 1.5365888465611983
+    },
+    {
+      "month": "2021-05",
+      "daylight_hours": 420,
+      "mae_base": 37.11647889782647,
+      "mae_a": 20.719674661478855,
+      "mae_b": 20.035436677456847,
+      "diff_b_vs_a": 0.6842379840220083,
+      "diff_pct": 3.302358725227065
+    },
+    {
+      "month": "2021-06",
+      "daylight_hours": 437,
+      "mae_base": 40.087510093766035,
+      "mae_a": 19.44649621230162,
+      "mae_b": 19.584841140054348,
+      "diff_b_vs_a": -0.13834492775272622,
+      "diff_pct": -0.7114131319204477
+    },
+    {
+      "month": "2021-07",
+      "daylight_hours": 399,
+      "mae_base": 34.96732170664056,
+      "mae_a": 18.93212308058212,
+      "mae_b": 19.306696111220518,
+      "diff_b_vs_a": -0.3745730306383983,
+      "diff_pct": -1.978505152560423
+    },
+    {
+      "month": "2021-08",
+      "daylight_hours": 419,
+      "mae_base": 32.28582216941264,
+      "mae_a": 20.96258245536357,
+      "mae_b": 20.602946482196216,
+      "diff_b_vs_a": 0.35963597316735374,
+      "diff_pct": 1.7156091046183857
+    },
+    {
+      "month": "2021-09",
+      "daylight_hours": 364,
+      "mae_base": 29.922947864487902,
+      "mae_a": 24.936424000284504,
+      "mae_b": 25.778116297212623,
+      "diff_b_vs_a": -0.8416922969281195,
+      "diff_pct": -3.375352844972946
+    },
+    {
+      "month": "2021-10",
+      "daylight_hours": 309,
+      "mae_base": 41.13683756991934,
+      "mae_a": 42.790369840627044,
+      "mae_b": 40.96413074174576,
+      "diff_b_vs_a": 1.826239098881281,
+      "diff_pct": 4.26787406999079
+    },
+    {
+      "month": "2021-11",
+      "daylight_hours": 300,
+      "mae_base": 46.02694909526131,
+      "mae_a": 42.88631023540676,
+      "mae_b": 40.332043075249885,
+      "diff_b_vs_a": 2.5542671601568756,
+      "diff_pct": 5.955903285072268
+    },
+    {
+      "month": "2021-12",
+      "daylight_hours": 302,
+      "mae_base": 44.1219418501979,
+      "mae_a": 43.88030215216765,
+      "mae_b": 38.86092913638867,
+      "diff_b_vs_a": 5.0193730157789815,
+      "diff_pct": 11.438784077586458
+    },
+    {
+      "month": "2022-01",
+      "daylight_hours": 252,
+      "mae_base": 46.06086947823862,
+      "mae_a": 40.73356182594551,
+      "mae_b": 40.64966613404659,
+      "diff_b_vs_a": 0.08389569189891688,
+      "diff_pct": 0.20596208172858327
+    },
+    {
+      "month": "2022-02",
+      "daylight_hours": 201,
+      "mae_base": 46.124715955266225,
+      "mae_a": 29.399809213310036,
+      "mae_b": 27.506993825607235,
+      "diff_b_vs_a": 1.8928153877028002,
+      "diff_pct": 6.438189356840707
+    },
+    {
+      "month": "2022-03",
+      "daylight_hours": 290,
+      "mae_base": 47.015760840746495,
+      "mae_a": 42.77933629045757,
+      "mae_b": 41.841707254463856,
+      "diff_b_vs_a": 0.9376290359937158,
+      "diff_pct": 2.1917802315293633
+    },
+    {
+      "month": "2022-04",
+      "daylight_hours": 397,
+      "mae_base": 56.37119403341378,
+      "mae_a": 40.47703438635618,
+      "mae_b": 41.93391354367651,
+      "diff_b_vs_a": -1.45687915732033,
+      "diff_pct": -3.599273463105806
+    },
+    {
+      "month": "2022-05",
+      "daylight_hours": 432,
+      "mae_base": 48.294170017462925,
+      "mae_a": 34.55743290752062,
+      "mae_b": 34.232421574534335,
+      "diff_b_vs_a": 0.3250113329862856,
+      "diff_pct": 0.9404961701178749
+    },
+    {
+      "month": "2022-06",
+      "daylight_hours": 429,
+      "mae_base": 44.77660296507057,
+      "mae_a": 23.448392687098785,
+      "mae_b": 23.21973468852174,
+      "diff_b_vs_a": 0.22865799857704516,
+      "diff_pct": 0.9751542531222275
+    },
+    {
+      "month": "2022-07",
+      "daylight_hours": 447,
+      "mae_base": 38.26596489492912,
+      "mae_a": 19.926617071086707,
+      "mae_b": 19.594113691663072,
+      "diff_b_vs_a": 0.3325033794236347,
+      "diff_pct": 1.6686393793660708
+    },
+    {
+      "month": "2022-08",
+      "daylight_hours": 415,
+      "mae_base": 36.752314433857215,
+      "mae_a": 23.443496926160492,
+      "mae_b": 22.094146471511873,
+      "diff_b_vs_a": 1.3493504546486186,
+      "diff_pct": 5.75575588786366
+    },
+    {
+      "month": "2022-09",
+      "daylight_hours": 350,
+      "mae_base": 37.131423058761754,
+      "mae_a": 28.244982114935674,
+      "mae_b": 29.096840744924982,
+      "diff_b_vs_a": -0.8518586299893087,
+      "diff_pct": -3.015964487153469
+    },
+    {
+      "month": "2022-10",
+      "daylight_hours": 189,
+      "mae_base": 28.0507358065009,
+      "mae_a": 18.629370773566755,
+      "mae_b": 18.077903525635136,
+      "diff_b_vs_a": 0.5514672479316189,
+      "diff_pct": 2.9602032974409243
+    }
+  ],
+  "tune_a": {
+    "feature_set": "A",
+    "feature_count": 23,
+    "ridge": {
+      "best_params": {
+        "alpha": 0.001,
+        "fit_intercept": true
+      },
+      "best_daylight_mae": 43.517002109930154,
+      "best_result": {
+        "mean_daylight_mae": 43.517002109930154,
+        "mean_daylight_rmse": 64.03822563584824,
+        "mean_capacity_norm_daylight_mae": 0.04873124536386355,
+        "mean_all_hour_mae": 21.812450807697704,
+        "fold_metrics": [
+          {
+            "daylight_mae_kwh": 43.92271406773565,
+            "daylight_rmse_kwh": 64.9470111137792,
+            "capacity_norm_daylight_mae": 0.04918557006465358,
+            "all_hour_mae_kwh": 22.281638879610433,
+            "all_hour_rmse_kwh": 46.200068716353904
+          },
+          {
+            "daylight_mae_kwh": 40.63247674898314,
+            "daylight_rmse_kwh": 60.60289461717837,
+            "capacity_norm_daylight_mae": 0.045501093783855695,
+            "all_hour_mae_kwh": 20.46486544149185,
+            "all_hour_rmse_kwh": 42.961580319217404
+          },
+          {
+            "daylight_mae_kwh": 45.99581551307167,
+            "daylight_rmse_kwh": 66.56477117658716,
+            "capacity_norm_daylight_mae": 0.051507072243081375,
+            "all_hour_mae_kwh": 22.69084810199084,
+            "all_hour_rmse_kwh": 46.7043397299837
+          }
+        ]
+      },
+      "trials": [
+        {
+          "params": {
+            "alpha": 0.001,
+            "fit_intercept": true
+          },
+          "score": 43.517002109930154,
+          "metrics": {
+            "mean_daylight_mae": 43.517002109930154,
+            "mean_daylight_rmse": 64.03822563584824,
+            "mean_capacity_norm_daylight_mae": 0.04873124536386355,
+            "mean_all_hour_mae": 21.812450807697704,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.92271406773565,
+                "daylight_rmse_kwh": 64.9470111137792,
+                "capacity_norm_daylight_mae": 0.04918557006465358,
+                "all_hour_mae_kwh": 22.281638879610433,
+                "all_hour_rmse_kwh": 46.200068716353904
+              },
+              {
+                "daylight_mae_kwh": 40.63247674898314,
+                "daylight_rmse_kwh": 60.60289461717837,
+                "capacity_norm_daylight_mae": 0.045501093783855695,
+                "all_hour_mae_kwh": 20.46486544149185,
+                "all_hour_rmse_kwh": 42.961580319217404
+              },
+              {
+                "daylight_mae_kwh": 45.99581551307167,
+                "daylight_rmse_kwh": 66.56477117658716,
+                "capacity_norm_daylight_mae": 0.051507072243081375,
+                "all_hour_mae_kwh": 22.69084810199084,
+                "all_hour_rmse_kwh": 46.7043397299837
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 0.01,
+            "fit_intercept": true
+          },
+          "score": 43.517102439797156,
+          "metrics": {
+            "mean_daylight_mae": 43.517102439797156,
+            "mean_daylight_rmse": 64.03825438734312,
+            "mean_capacity_norm_daylight_mae": 0.048731357715338354,
+            "mean_all_hour_mae": 21.812501111095134,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.92286396994859,
+                "daylight_rmse_kwh": 64.94700999077237,
+                "capacity_norm_daylight_mae": 0.049185737928273895,
+                "all_hour_mae_kwh": 22.281714719912518,
+                "all_hour_rmse_kwh": 46.20006791764053
+              },
+              {
+                "daylight_mae_kwh": 40.632545014065755,
+                "daylight_rmse_kwh": 60.6029266269767,
+                "capacity_norm_daylight_mae": 0.04550117022851708,
+                "all_hour_mae_kwh": 20.464899743370616,
+                "all_hour_rmse_kwh": 42.9616030082169
+              },
+              {
+                "daylight_mae_kwh": 45.995898335377106,
+                "daylight_rmse_kwh": 66.5648265442803,
+                "capacity_norm_daylight_mae": 0.051507164989224086,
+                "all_hour_mae_kwh": 22.690888870002276,
+                "all_hour_rmse_kwh": 46.70437857325954
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 0.1,
+            "fit_intercept": true
+          },
+          "score": 43.51810606898345,
+          "metrics": {
+            "mean_daylight_mae": 43.51810606898345,
+            "mean_daylight_rmse": 64.0385439142804,
+            "mean_capacity_norm_daylight_mae": 0.048732481600205435,
+            "mean_all_hour_mae": 21.813004301540882,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.924361532119796,
+                "daylight_rmse_kwh": 64.94700309992146,
+                "capacity_norm_daylight_mae": 0.049187414929585435,
+                "all_hour_mae_kwh": 22.282472384294007,
+                "all_hour_rmse_kwh": 46.20006301667767
+              },
+              {
+                "daylight_mae_kwh": 40.633227795373465,
+                "daylight_rmse_kwh": 60.60324805211163,
+                "capacity_norm_daylight_mae": 0.045501934821246884,
+                "all_hour_mae_kwh": 20.46524282772271,
+                "all_hour_rmse_kwh": 42.9618308389158
+              },
+              {
+                "daylight_mae_kwh": 45.99672887945709,
+                "daylight_rmse_kwh": 66.5653805908081,
+                "capacity_norm_daylight_mae": 0.05150809504978397,
+                "all_hour_mae_kwh": 22.691297692605925,
+                "all_hour_rmse_kwh": 46.704767265308845
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 1.0,
+            "fit_intercept": true
+          },
+          "score": 43.52823185113089,
+          "metrics": {
+            "mean_daylight_mae": 43.52823185113089,
+            "mean_daylight_rmse": 64.04162191642389,
+            "mean_capacity_norm_daylight_mae": 0.048743820661960674,
+            "mean_all_hour_mae": 21.818080527913462,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.93921666536981,
+                "daylight_rmse_kwh": 64.94731672555972,
+                "capacity_norm_daylight_mae": 0.04920405001721144,
+                "all_hour_mae_kwh": 22.289988069159815,
+                "all_hour_rmse_kwh": 46.200286075865336
+              },
+              {
+                "daylight_mae_kwh": 40.64029623426044,
+                "daylight_rmse_kwh": 60.606591729143716,
+                "capacity_norm_daylight_mae": 0.04550985020633868,
+                "all_hour_mae_kwh": 20.46879458104178,
+                "all_hour_rmse_kwh": 42.96420088467532
+              },
+              {
+                "daylight_mae_kwh": 46.005182653762404,
+                "daylight_rmse_kwh": 66.57095729456823,
+                "capacity_norm_daylight_mae": 0.051517561762331916,
+                "all_hour_mae_kwh": 22.695458933538788,
+                "all_hour_rmse_kwh": 46.70867960897753
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 10.0,
+            "fit_intercept": true
+          },
+          "score": 43.63948466825116,
+          "metrics": {
+            "mean_daylight_mae": 43.63948466825116,
+            "mean_daylight_rmse": 64.08656902684878,
+            "mean_capacity_norm_daylight_mae": 0.04886840388381988,
+            "mean_all_hour_mae": 21.87387718596845,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 44.10450348325221,
+                "daylight_rmse_kwh": 64.97979341092085,
+                "capacity_norm_daylight_mae": 0.049389141638580304,
+                "all_hour_mae_kwh": 22.373611932693716,
+                "all_hour_rmse_kwh": 46.22338438954421
+              },
+              {
+                "daylight_mae_kwh": 40.722136682426324,
+                "daylight_rmse_kwh": 60.65022882503798,
+                "capacity_norm_daylight_mae": 0.045601496844822315,
+                "all_hour_mae_kwh": 20.509917817452997,
+                "all_hour_rmse_kwh": 42.995131479380774
+              },
+              {
+                "daylight_mae_kwh": 46.09181383907493,
+                "daylight_rmse_kwh": 66.62968484458752,
+                "capacity_norm_daylight_mae": 0.05161457316805703,
+                "all_hour_mae_kwh": 22.738101807758625,
+                "all_hour_rmse_kwh": 46.7498799993876
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 100.0,
+            "fit_intercept": true
+          },
+          "score": 44.736964815512586,
+          "metrics": {
+            "mean_daylight_mae": 44.736964815512586,
+            "mean_daylight_rmse": 64.80811384039774,
+            "mean_capacity_norm_daylight_mae": 0.05009738501177221,
+            "mean_all_hour_mae": 22.424187790575626,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 45.620425294895036,
+                "daylight_rmse_kwh": 65.83259461230959,
+                "capacity_norm_daylight_mae": 0.051086702457889176,
+                "all_hour_mae_kwh": 23.140565040805935,
+                "all_hour_rmse_kwh": 46.82992080984114
+              },
+              {
+                "daylight_mae_kwh": 41.650763328437634,
+                "daylight_rmse_kwh": 61.309916658504726,
+                "capacity_norm_daylight_mae": 0.04664139230508134,
+                "all_hour_mae_kwh": 20.9765346793778,
+                "all_hour_rmse_kwh": 43.462727941917244
+              },
+              {
+                "daylight_mae_kwh": 46.93970582320508,
+                "daylight_rmse_kwh": 67.2818302503789,
+                "capacity_norm_daylight_mae": 0.052564060272346114,
+                "all_hour_mae_kwh": 23.155463651543137,
+                "all_hour_rmse_kwh": 47.20739376828456
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 1000.0,
+            "fit_intercept": true
+          },
+          "score": 50.17903930998467,
+          "metrics": {
+            "mean_daylight_mae": 50.17903930998467,
+            "mean_daylight_rmse": 69.66245282870453,
+            "mean_capacity_norm_daylight_mae": 0.05619153338184174,
+            "mean_all_hour_mae": 25.150769919605438,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 52.3611253785752,
+                "daylight_rmse_kwh": 71.51478351338959,
+                "capacity_norm_daylight_mae": 0.0586350788113944,
+                "all_hour_mae_kwh": 26.55089982214153,
+                "all_hour_rmse_kwh": 50.87128623538574
+              },
+              {
+                "daylight_mae_kwh": 46.63661187742778,
+                "daylight_rmse_kwh": 65.77062424532437,
+                "capacity_norm_daylight_mae": 0.052224649358821706,
+                "all_hour_mae_kwh": 23.48182678353495,
+                "all_hour_rmse_kwh": 46.624558492982636
+              },
+              {
+                "daylight_mae_kwh": 51.53938067395102,
+                "daylight_rmse_kwh": 71.7019507273996,
+                "capacity_norm_daylight_mae": 0.0577148719753091,
+                "all_hour_mae_kwh": 25.41958315313983,
+                "all_hour_rmse_kwh": 50.30835046989106
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 10000.0,
+            "fit_intercept": true
+          },
+          "score": 69.16341304701434,
+          "metrics": {
+            "mean_daylight_mae": 69.16341304701434,
+            "mean_daylight_rmse": 86.77289491119706,
+            "mean_capacity_norm_daylight_mae": 0.07745063051177419,
+            "mean_all_hour_mae": 34.67620177521865,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 80.01674802526132,
+                "daylight_rmse_kwh": 95.46172704020849,
+                "capacity_norm_daylight_mae": 0.08960442108091973,
+                "all_hour_mae_kwh": 40.54275981303936,
+                "all_hour_rmse_kwh": 67.90357286678542
+              },
+              {
+                "daylight_mae_kwh": 62.56401411108883,
+                "daylight_rmse_kwh": 80.07506942467364,
+                "capacity_norm_daylight_mae": 0.07006048612663923,
+                "all_hour_mae_kwh": 31.485037202713848,
+                "all_hour_rmse_kwh": 56.76394474534995
+              },
+              {
+                "daylight_mae_kwh": 64.90947700469287,
+                "daylight_rmse_kwh": 84.78188826870904,
+                "capacity_norm_daylight_mae": 0.07268698432776358,
+                "all_hour_mae_kwh": 32.00080830990275,
+                "all_hour_rmse_kwh": 59.48475022694216
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "hist_gradient_boosting": {
+      "best_params": {
+        "l2_regularization": 1.0,
+        "learning_rate": 0.05,
+        "max_iter": 200,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100
+      },
+      "best_daylight_mae": 32.24459842314726,
+      "best_result": {
+        "mean_daylight_mae": 32.24459842314726,
+        "mean_daylight_rmse": 54.76023128910159,
+        "mean_capacity_norm_daylight_mae": 0.03610817292625673,
+        "mean_all_hour_mae": 16.1815128049071,
+        "fold_metrics": [
+          {
+            "daylight_mae_kwh": 33.82466569476548,
+            "daylight_rmse_kwh": 57.55314073530921,
+            "capacity_norm_daylight_mae": 0.0378775651677105,
+            "all_hour_mae_kwh": 17.172714708169202,
+            "all_hour_rmse_kwh": 40.94140280707132
+          },
+          {
+            "daylight_mae_kwh": 30.043339245562667,
+            "daylight_rmse_kwh": 51.113883912664384,
+            "capacity_norm_daylight_mae": 0.0336431570499022,
+            "all_hour_mae_kwh": 15.144029415991852,
+            "all_hour_rmse_kwh": 36.23571311917602
+          },
+          {
+            "daylight_mae_kwh": 32.865790329113636,
+            "daylight_rmse_kwh": 55.61366921933117,
+            "capacity_norm_daylight_mae": 0.03680379656115749,
+            "all_hour_mae_kwh": 16.22779429056025,
+            "all_hour_rmse_kwh": 39.02167312220034
+          }
+        ]
+      },
+      "trials": [
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.1,
+            "max_iter": 150,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 50
+          },
+          "score": 32.7341065331565,
+          "metrics": {
+            "mean_daylight_mae": 32.7341065331565,
+            "mean_daylight_rmse": 55.13276234403967,
+            "mean_capacity_norm_daylight_mae": 0.0366563343036467,
+            "mean_all_hour_mae": 16.427839950618033,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 34.78617318190104,
+                "daylight_rmse_kwh": 58.49280127275232,
+                "capacity_norm_daylight_mae": 0.03895428127872457,
+                "all_hour_mae_kwh": 17.6591719581857,
+                "all_hour_rmse_kwh": 41.609700672033654
+              },
+              {
+                "daylight_mae_kwh": 30.33154337169375,
+                "daylight_rmse_kwh": 51.084231964064905,
+                "capacity_norm_daylight_mae": 0.03396589403325168,
+                "all_hour_mae_kwh": 15.288846394383215,
+                "all_hour_rmse_kwh": 36.21469593289531
+              },
+              {
+                "daylight_mae_kwh": 33.08460304587471,
+                "daylight_rmse_kwh": 55.8212537953018,
+                "capacity_norm_daylight_mae": 0.037048827598963836,
+                "all_hour_mae_kwh": 16.335501499285176,
+                "all_hour_rmse_kwh": 39.167300523298444
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.1,
+            "max_iter": 150,
+            "max_leaf_nodes": 63,
+            "min_samples_leaf": 50
+          },
+          "score": 32.794275880349424,
+          "metrics": {
+            "mean_daylight_mae": 32.794275880349424,
+            "mean_daylight_rmse": 55.294631033164876,
+            "mean_capacity_norm_daylight_mae": 0.036723713191880655,
+            "mean_all_hour_mae": 16.459902321012958,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 35.16171599242502,
+                "daylight_rmse_kwh": 58.769377319894815,
+                "capacity_norm_daylight_mae": 0.039374821940005626,
+                "all_hour_mae_kwh": 17.849171022483365,
+                "all_hour_rmse_kwh": 41.806405319781696
+              },
+              {
+                "daylight_mae_kwh": 30.545377647516656,
+                "daylight_rmse_kwh": 51.371345064989654,
+                "capacity_norm_daylight_mae": 0.034205350109201185,
+                "all_hour_mae_kwh": 15.396293966757991,
+                "all_hour_rmse_kwh": 36.41820067636822
+              },
+              {
+                "daylight_mae_kwh": 32.6757340011066,
+                "daylight_rmse_kwh": 55.743170714610166,
+                "capacity_norm_daylight_mae": 0.03659096752643516,
+                "all_hour_mae_kwh": 16.13424197379751,
+                "all_hour_rmse_kwh": 39.11252266528894
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.01,
+            "max_iter": 50,
+            "max_leaf_nodes": 63,
+            "min_samples_leaf": 10
+          },
+          "score": 131.94251084176236,
+          "metrics": {
+            "mean_daylight_mae": 131.94251084176236,
+            "mean_daylight_rmse": 147.5541809513237,
+            "mean_capacity_norm_daylight_mae": 0.14775197182728148,
+            "mean_all_hour_mae": 66.04372617009864,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 132.92058568038104,
+                "daylight_rmse_kwh": 148.5620194782835,
+                "capacity_norm_daylight_mae": 0.1488472404035622,
+                "all_hour_mae_kwh": 67.30849562410133,
+                "all_hour_rmse_kwh": 105.67225049754165
+              },
+              {
+                "daylight_mae_kwh": 128.13100548047697,
+                "daylight_rmse_kwh": 143.80994550180986,
+                "capacity_norm_daylight_mae": 0.14348376873513657,
+                "all_hour_mae_kwh": 64.43117749498943,
+                "all_hour_rmse_kwh": 101.94205932532213
+              },
+              {
+                "daylight_mae_kwh": 134.77594136442903,
+                "daylight_rmse_kwh": 150.29057787387777,
+                "capacity_norm_daylight_mae": 0.15092490634314562,
+                "all_hour_mae_kwh": 66.39150539120516,
+                "all_hour_rmse_kwh": 105.44429708976945
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.2,
+            "max_iter": 50,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 10
+          },
+          "score": 33.8078507097855,
+          "metrics": {
+            "mean_daylight_mae": 33.8078507097855,
+            "mean_daylight_rmse": 55.92482564198633,
+            "mean_capacity_norm_daylight_mae": 0.037858735397296193,
+            "mean_all_hour_mae": 16.96263984251786,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 35.42088150321942,
+                "daylight_rmse_kwh": 58.50078489412715,
+                "capacity_norm_daylight_mae": 0.03966504087706542,
+                "all_hour_mae_kwh": 17.980291105651673,
+                "all_hour_rmse_kwh": 41.61537872942059
+              },
+              {
+                "daylight_mae_kwh": 31.31765463352469,
+                "daylight_rmse_kwh": 51.95563199126045,
+                "capacity_norm_daylight_mae": 0.035070161963633474,
+                "all_hour_mae_kwh": 15.78434815979201,
+                "all_hour_rmse_kwh": 36.83234177853275
+              },
+              {
+                "daylight_mae_kwh": 34.685015992612385,
+                "daylight_rmse_kwh": 57.318060040571396,
+                "capacity_norm_daylight_mae": 0.03884100335118968,
+                "all_hour_mae_kwh": 17.123280262109898,
+                "all_hour_rmse_kwh": 40.217362026355566
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 200,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 100
+          },
+          "score": 32.24459842314726,
+          "metrics": {
+            "mean_daylight_mae": 32.24459842314726,
+            "mean_daylight_rmse": 54.76023128910159,
+            "mean_capacity_norm_daylight_mae": 0.03610817292625673,
+            "mean_all_hour_mae": 16.1815128049071,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 33.82466569476548,
+                "daylight_rmse_kwh": 57.55314073530921,
+                "capacity_norm_daylight_mae": 0.0378775651677105,
+                "all_hour_mae_kwh": 17.172714708169202,
+                "all_hour_rmse_kwh": 40.94140280707132
+              },
+              {
+                "daylight_mae_kwh": 30.043339245562667,
+                "daylight_rmse_kwh": 51.113883912664384,
+                "capacity_norm_daylight_mae": 0.0336431570499022,
+                "all_hour_mae_kwh": 15.144029415991852,
+                "all_hour_rmse_kwh": 36.23571311917602
+              },
+              {
+                "daylight_mae_kwh": 32.865790329113636,
+                "daylight_rmse_kwh": 55.61366921933117,
+                "capacity_norm_daylight_mae": 0.03680379656115749,
+                "all_hour_mae_kwh": 16.22779429056025,
+                "all_hour_rmse_kwh": 39.02167312220034
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.15,
+            "max_iter": 150,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 50
+          },
+          "score": 33.297791084590045,
+          "metrics": {
+            "mean_daylight_mae": 33.297791084590045,
+            "mean_daylight_rmse": 55.405223938152325,
+            "mean_capacity_norm_daylight_mae": 0.037287560005140025,
+            "mean_all_hour_mae": 16.708673513526808,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 35.03422758465718,
+                "daylight_rmse_kwh": 58.36580119367575,
+                "capacity_norm_daylight_mae": 0.03923205776557355,
+                "all_hour_mae_kwh": 17.78467057804431,
+                "all_hour_rmse_kwh": 41.51937655393655
+              },
+              {
+                "daylight_mae_kwh": 30.986223355823796,
+                "daylight_rmse_kwh": 51.66860311127521,
+                "capacity_norm_daylight_mae": 0.034699018315592155,
+                "all_hour_mae_kwh": 15.617810376917932,
+                "all_hour_rmse_kwh": 36.628896330113115
+              },
+              {
+                "daylight_mae_kwh": 33.872922313289166,
+                "daylight_rmse_kwh": 56.181267509506036,
+                "capacity_norm_daylight_mae": 0.03793160393425438,
+                "all_hour_mae_kwh": 16.723539585618184,
+                "all_hour_rmse_kwh": 39.4198621973246
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.03,
+            "max_iter": 50,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 20
+          },
+          "score": 63.90652765703086,
+          "metrics": {
+            "mean_daylight_mae": 63.90652765703086,
+            "mean_daylight_rmse": 76.88554025408838,
+            "mean_capacity_norm_daylight_mae": 0.07156386075815324,
+            "mean_all_hour_mae": 32.01399400189856,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 64.79417563345733,
+                "daylight_rmse_kwh": 78.23730730667555,
+                "capacity_norm_daylight_mae": 0.0725578674506801,
+                "all_hour_mae_kwh": 32.84117578694439,
+                "all_hour_rmse_kwh": 55.652631674587795
+              },
+              {
+                "daylight_mae_kwh": 61.07527759257653,
+                "daylight_rmse_kwh": 73.47358795904593,
+                "capacity_norm_daylight_mae": 0.06839336796481135,
+                "all_hour_mae_kwh": 30.736976003431202,
+                "all_hour_rmse_kwh": 52.08461070095618
+              },
+              {
+                "daylight_mae_kwh": 65.85012974505868,
+                "daylight_rmse_kwh": 78.94572549654369,
+                "capacity_norm_daylight_mae": 0.07374034685896828,
+                "all_hour_mae_kwh": 32.46383021532009,
+                "all_hour_rmse_kwh": 55.390297744900955
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.2,
+            "max_iter": 150,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 50
+          },
+          "score": 33.78188798478929,
+          "metrics": {
+            "mean_daylight_mae": 33.78188798478929,
+            "mean_daylight_rmse": 56.0625983750355,
+            "mean_capacity_norm_daylight_mae": 0.037829661797076475,
+            "mean_all_hour_mae": 16.952086147967453,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 35.65070231673119,
+                "daylight_rmse_kwh": 59.25657514744307,
+                "capacity_norm_daylight_mae": 0.03992239901089719,
+                "all_hour_mae_kwh": 18.096564772194352,
+                "all_hour_rmse_kwh": 42.15290751589269
+              },
+              {
+                "daylight_mae_kwh": 31.66221063055585,
+                "daylight_rmse_kwh": 52.36482377936513,
+                "capacity_norm_daylight_mae": 0.035456002945751235,
+                "all_hour_mae_kwh": 15.957480859335602,
+                "all_hour_rmse_kwh": 37.122376362446694
+              },
+              {
+                "daylight_mae_kwh": 34.03275100708083,
+                "daylight_rmse_kwh": 56.56639619829831,
+                "capacity_norm_daylight_mae": 0.038110583434581,
+                "all_hour_mae_kwh": 16.802212812372403,
+                "all_hour_rmse_kwh": 39.69004317584902
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.03,
+            "max_iter": 100,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 100
+          },
+          "score": 38.65592819056584,
+          "metrics": {
+            "mean_daylight_mae": 38.65592819056584,
+            "mean_daylight_rmse": 57.85104410038497,
+            "mean_capacity_norm_daylight_mae": 0.04328771353926745,
+            "mean_all_hour_mae": 19.382278693904286,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 38.99962841747747,
+                "daylight_rmse_kwh": 59.49748484444797,
+                "capacity_norm_daylight_mae": 0.043672596212180816,
+                "all_hour_mae_kwh": 19.790893108971833,
+                "all_hour_rmse_kwh": 42.324246222744414
+              },
+              {
+                "daylight_mae_kwh": 36.2681447936273,
+                "daylight_rmse_kwh": 54.342836588514274,
+                "capacity_norm_daylight_mae": 0.04061382395702945,
+                "all_hour_mae_kwh": 18.271873359955737,
+                "all_hour_rmse_kwh": 38.52439436990925
+              },
+              {
+                "daylight_mae_kwh": 40.70001136059275,
+                "daylight_rmse_kwh": 59.712810868192676,
+                "capacity_norm_daylight_mae": 0.0455767204485921,
+                "all_hour_mae_kwh": 20.084069612785296,
+                "all_hour_rmse_kwh": 41.89737211840453
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.01,
+            "max_iter": 200,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 10
+          },
+          "score": 49.93948008558658,
+          "metrics": {
+            "mean_daylight_mae": 49.93948008558658,
+            "mean_daylight_rmse": 65.00780106072263,
+            "mean_capacity_norm_daylight_mae": 0.05592326997266134,
+            "mean_all_hour_mae": 25.02785705390195,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 50.674225785005525,
+                "daylight_rmse_kwh": 66.61002551870607,
+                "capacity_norm_daylight_mae": 0.05674605351064448,
+                "all_hour_mae_kwh": 25.6974436105976,
+                "all_hour_rmse_kwh": 47.38285288750961
+              },
+              {
+                "daylight_mae_kwh": 47.429631629363094,
+                "daylight_rmse_kwh": 61.61296679605075,
+                "capacity_norm_daylight_mae": 0.05311268939458353,
+                "all_hour_mae_kwh": 23.880303813762147,
+                "all_hour_rmse_kwh": 43.67753455535644
+              },
+              {
+                "daylight_mae_kwh": 51.714582842391124,
+                "daylight_rmse_kwh": 66.80041086741105,
+                "capacity_norm_daylight_mae": 0.057911067012756015,
+                "all_hour_mae_kwh": 25.505823737346102,
+                "all_hour_rmse_kwh": 46.869653091814875
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "tune_b": {
+    "feature_set": "A",
+    "feature_count": 29,
+    "ridge": {
+      "best_params": {
+        "alpha": 0.001,
+        "fit_intercept": true
+      },
+      "best_daylight_mae": 42.67079573185845,
+      "best_result": {
+        "mean_daylight_mae": 42.67079573185845,
+        "mean_daylight_rmse": 62.27430930994796,
+        "mean_capacity_norm_daylight_mae": 0.047783645836347644,
+        "mean_all_hour_mae": 21.391580978023786,
+        "fold_metrics": [
+          {
+            "daylight_mae_kwh": 43.40247159505431,
+            "daylight_rmse_kwh": 63.92854879004802,
+            "capacity_norm_daylight_mae": 0.04860299170778758,
+            "all_hour_mae_kwh": 22.018431649309722,
+            "all_hour_rmse_kwh": 45.475711269871276
+          },
+          {
+            "daylight_mae_kwh": 40.05788033191528,
+            "daylight_rmse_kwh": 59.0609449330454,
+            "capacity_norm_daylight_mae": 0.04485764874794544,
+            "all_hour_mae_kwh": 20.17614189672059,
+            "all_hour_rmse_kwh": 41.86862628188332
+          },
+          {
+            "daylight_mae_kwh": 44.55203526860574,
+            "daylight_rmse_kwh": 63.83343420675045,
+            "capacity_norm_daylight_mae": 0.0498902970533099,
+            "all_hour_mae_kwh": 21.98016938804105,
+            "all_hour_rmse_kwh": 44.78817182886169
+          }
+        ]
+      },
+      "trials": [
+        {
+          "params": {
+            "alpha": 0.001,
+            "fit_intercept": true
+          },
+          "score": 42.67079573185845,
+          "metrics": {
+            "mean_daylight_mae": 42.67079573185845,
+            "mean_daylight_rmse": 62.27430930994796,
+            "mean_capacity_norm_daylight_mae": 0.047783645836347644,
+            "mean_all_hour_mae": 21.391580978023786,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.40247159505431,
+                "daylight_rmse_kwh": 63.92854879004802,
+                "capacity_norm_daylight_mae": 0.04860299170778758,
+                "all_hour_mae_kwh": 22.018431649309722,
+                "all_hour_rmse_kwh": 45.475711269871276
+              },
+              {
+                "daylight_mae_kwh": 40.05788033191528,
+                "daylight_rmse_kwh": 59.0609449330454,
+                "capacity_norm_daylight_mae": 0.04485764874794544,
+                "all_hour_mae_kwh": 20.17614189672059,
+                "all_hour_rmse_kwh": 41.86862628188332
+              },
+              {
+                "daylight_mae_kwh": 44.55203526860574,
+                "daylight_rmse_kwh": 63.83343420675045,
+                "capacity_norm_daylight_mae": 0.0498902970533099,
+                "all_hour_mae_kwh": 21.98016938804105,
+                "all_hour_rmse_kwh": 44.78817182886169
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 0.01,
+            "fit_intercept": true
+          },
+          "score": 42.670905346117905,
+          "metrics": {
+            "mean_daylight_mae": 42.670905346117905,
+            "mean_daylight_rmse": 62.27434509613124,
+            "mean_capacity_norm_daylight_mae": 0.047783768584678504,
+            "mean_all_hour_mae": 21.391635908662465,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.40261974615989,
+                "daylight_rmse_kwh": 63.92855208398541,
+                "capacity_norm_daylight_mae": 0.0486031576104814,
+                "all_hour_mae_kwh": 22.01850660367084,
+                "all_hour_rmse_kwh": 45.47571361260374
+              },
+              {
+                "daylight_mae_kwh": 40.05796766891167,
+                "daylight_rmse_kwh": 59.060985504710025,
+                "capacity_norm_daylight_mae": 0.04485774654973312,
+                "all_hour_mae_kwh": 20.176185781865772,
+                "all_hour_rmse_kwh": 41.868655039559805
+              },
+              {
+                "daylight_mae_kwh": 44.55212862328215,
+                "daylight_rmse_kwh": 63.83349769969829,
+                "capacity_norm_daylight_mae": 0.049890401593821,
+                "all_hour_mae_kwh": 21.98021534045079,
+                "all_hour_rmse_kwh": 44.788216372181104
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 0.1,
+            "fit_intercept": true
+          },
+          "score": 42.6720060553124,
+          "metrics": {
+            "mean_daylight_mae": 42.6720060553124,
+            "mean_daylight_rmse": 62.27470500239841,
+            "mean_capacity_norm_daylight_mae": 0.0477850011817608,
+            "mean_all_hour_mae": 21.39218752731442,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.40411547398278,
+                "daylight_rmse_kwh": 63.92858980804774,
+                "capacity_norm_daylight_mae": 0.04860483255765149,
+                "all_hour_mae_kwh": 22.019263339997114,
+                "all_hour_rmse_kwh": 45.47574044292107
+              },
+              {
+                "daylight_mae_kwh": 40.058840897312514,
+                "daylight_rmse_kwh": 59.06139236571923,
+                "capacity_norm_daylight_mae": 0.04485872440908456,
+                "all_hour_mae_kwh": 20.176624562184962,
+                "all_hour_rmse_kwh": 41.86894342746274
+              },
+              {
+                "daylight_mae_kwh": 44.553061794641906,
+                "daylight_rmse_kwh": 63.83413283342827,
+                "capacity_norm_daylight_mae": 0.04989144657854637,
+                "all_hour_mae_kwh": 21.98067467976118,
+                "all_hour_rmse_kwh": 44.78866194866767
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 1.0,
+            "fit_intercept": true
+          },
+          "score": 42.68318815804503,
+          "metrics": {
+            "mean_daylight_mae": 42.68318815804503,
+            "mean_daylight_rmse": 62.27850049462294,
+            "mean_capacity_norm_daylight_mae": 0.0477975231333091,
+            "mean_all_hour_mae": 21.397792230183,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.41956422623887,
+                "daylight_rmse_kwh": 63.9294250474159,
+                "capacity_norm_daylight_mae": 0.04862213239220478,
+                "all_hour_mae_kwh": 22.027079355617616,
+                "all_hour_rmse_kwh": 45.476334486508485
+              },
+              {
+                "daylight_mae_kwh": 40.06761008510996,
+                "daylight_rmse_kwh": 59.065572373174795,
+                "capacity_norm_daylight_mae": 0.04486854432823064,
+                "all_hour_mae_kwh": 20.18103090881442,
+                "all_hour_rmse_kwh": 41.87190626627817
+              },
+              {
+                "daylight_mae_kwh": 44.56239016278626,
+                "daylight_rmse_kwh": 63.84050406327812,
+                "capacity_norm_daylight_mae": 0.04990189267949189,
+                "all_hour_mae_kwh": 21.98526642611696,
+                "all_hour_rmse_kwh": 44.79313166913511
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 10.0,
+            "fit_intercept": true
+          },
+          "score": 42.80426660358509,
+          "metrics": {
+            "mean_daylight_mae": 42.80426660358509,
+            "mean_daylight_rmse": 62.33003550406982,
+            "mean_capacity_norm_daylight_mae": 0.047933109298527544,
+            "mean_all_hour_mae": 21.45851672959868,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 43.5943491783662,
+                "daylight_rmse_kwh": 63.968361236057106,
+                "capacity_norm_daylight_mae": 0.04881786022213461,
+                "all_hour_mae_kwh": 22.115508627665644,
+                "all_hour_rmse_kwh": 45.50402690061432
+              },
+              {
+                "daylight_mae_kwh": 40.16349335344558,
+                "daylight_rmse_kwh": 59.11603046013041,
+                "capacity_norm_daylight_mae": 0.044975916409233575,
+                "all_hour_mae_kwh": 20.22921038974363,
+                "all_hour_rmse_kwh": 41.907671558396885
+              },
+              {
+                "daylight_mae_kwh": 44.654957278943506,
+                "daylight_rmse_kwh": 63.905714816021934,
+                "capacity_norm_daylight_mae": 0.05000555126421445,
+                "all_hour_mae_kwh": 22.030831171386772,
+                "all_hour_rmse_kwh": 44.838880114084795
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 100.0,
+            "fit_intercept": true
+          },
+          "score": 43.914199393940486,
+          "metrics": {
+            "mean_daylight_mae": 43.914199393940486,
+            "mean_daylight_rmse": 63.06286860632647,
+            "mean_capacity_norm_daylight_mae": 0.04917603515558846,
+            "mean_all_hour_mae": 22.015114016904224,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 45.12617543741922,
+                "daylight_rmse_kwh": 64.86055060360417,
+                "capacity_norm_daylight_mae": 0.05053323117292186,
+                "all_hour_mae_kwh": 22.89050830208516,
+                "all_hour_rmse_kwh": 46.13857562845258
+              },
+              {
+                "daylight_mae_kwh": 41.11684538760591,
+                "daylight_rmse_kwh": 59.77965758715397,
+                "capacity_norm_daylight_mae": 0.04604349987413876,
+                "all_hour_mae_kwh": 20.708251279212245,
+                "all_hour_rmse_kwh": 42.378058728996436
+              },
+              {
+                "daylight_mae_kwh": 45.49957735679634,
+                "daylight_rmse_kwh": 64.54839762822125,
+                "capacity_norm_daylight_mae": 0.050951374419704744,
+                "all_hour_mae_kwh": 22.446582469415276,
+                "all_hour_rmse_kwh": 45.28975300750209
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 1000.0,
+            "fit_intercept": true
+          },
+          "score": 48.99244355214666,
+          "metrics": {
+            "mean_daylight_mae": 48.99244355214666,
+            "mean_daylight_rmse": 67.60059218369864,
+            "mean_capacity_norm_daylight_mae": 0.054862758737006356,
+            "mean_all_hour_mae": 24.559074727207186,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 51.38306814313777,
+                "daylight_rmse_kwh": 70.25640079589546,
+                "capacity_norm_daylight_mae": 0.0575398299475227,
+                "all_hour_mae_kwh": 26.056069527551685,
+                "all_hour_rmse_kwh": 49.976277422482795
+              },
+              {
+                "daylight_mae_kwh": 45.7154425455208,
+                "daylight_rmse_kwh": 63.99757459345675,
+                "capacity_norm_daylight_mae": 0.051193104754222625,
+                "all_hour_mae_kwh": 23.018957077176594,
+                "all_hour_rmse_kwh": 45.3677856837202
+              },
+              {
+                "daylight_mae_kwh": 49.87881996778143,
+                "daylight_rmse_kwh": 68.5478011617437,
+                "capacity_norm_daylight_mae": 0.05585534150927372,
+                "all_hour_mae_kwh": 24.602197576893275,
+                "all_hour_rmse_kwh": 48.09553942125802
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "alpha": 10000.0,
+            "fit_intercept": true
+          },
+          "score": 66.75107150656588,
+          "metrics": {
+            "mean_daylight_mae": 66.75107150656588,
+            "mean_daylight_rmse": 84.00977520338687,
+            "mean_capacity_norm_daylight_mae": 0.07474924020892036,
+            "mean_all_hour_mae": 33.46964279716965,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 77.21714417968603,
+                "daylight_rmse_kwh": 93.02264312975234,
+                "capacity_norm_daylight_mae": 0.08646936638262713,
+                "all_hour_mae_kwh": 39.12635109436014,
+                "all_hour_rmse_kwh": 66.16875071918211
+              },
+              {
+                "daylight_mae_kwh": 60.708072287901295,
+                "daylight_rmse_kwh": 77.97937133454687,
+                "capacity_norm_daylight_mae": 0.06798216381623885,
+                "all_hour_mae_kwh": 30.55246246649398,
+                "all_hour_rmse_kwh": 55.27844582303171
+              },
+              {
+                "daylight_mae_kwh": 62.32799805211034,
+                "daylight_rmse_kwh": 81.02731114586138,
+                "capacity_norm_daylight_mae": 0.06979619042789512,
+                "all_hour_mae_kwh": 30.730114830654827,
+                "all_hour_rmse_kwh": 56.850664392662324
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "hist_gradient_boosting": {
+      "best_params": {
+        "l2_regularization": 1.0,
+        "learning_rate": 0.05,
+        "max_iter": 200,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100
+      },
+      "best_daylight_mae": 31.53487926567001,
+      "best_result": {
+        "mean_daylight_mae": 31.53487926567001,
+        "mean_daylight_rmse": 53.327739521399224,
+        "mean_capacity_norm_daylight_mae": 0.03531341463120941,
+        "mean_all_hour_mae": 15.826711984123092,
+        "fold_metrics": [
+          {
+            "daylight_mae_kwh": 32.89022550173288,
+            "daylight_rmse_kwh": 55.57574843672892,
+            "capacity_norm_daylight_mae": 0.0368311595764086,
+            "all_hour_mae_kwh": 16.699951664002256,
+            "all_hour_rmse_kwh": 39.53506561834916
+          },
+          {
+            "daylight_mae_kwh": 29.696065327306307,
+            "daylight_rmse_kwh": 50.520161100584225,
+            "capacity_norm_daylight_mae": 0.033254272482985785,
+            "all_hour_mae_kwh": 14.969531013796384,
+            "all_hour_rmse_kwh": 35.81488510478386
+          },
+          {
+            "daylight_mae_kwh": 32.01834696797084,
+            "daylight_rmse_kwh": 53.88730902688454,
+            "capacity_norm_daylight_mae": 0.03585481183423386,
+            "all_hour_mae_kwh": 15.810653274570635,
+            "all_hour_rmse_kwh": 37.8105785320509
+          }
+        ]
+      },
+      "trials": [
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.1,
+            "max_iter": 150,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 50
+          },
+          "score": 32.04024658536074,
+          "metrics": {
+            "mean_daylight_mae": 32.04024658536074,
+            "mean_daylight_rmse": 53.72714167245971,
+            "mean_capacity_norm_daylight_mae": 0.03587933548192692,
+            "mean_all_hour_mae": 16.08068751864568,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 33.45544639404042,
+                "daylight_rmse_kwh": 56.16188640703738,
+                "capacity_norm_daylight_mae": 0.03746410570441257,
+                "all_hour_mae_kwh": 16.9859149088054,
+                "all_hour_rmse_kwh": 39.95193044802832
+              },
+              {
+                "daylight_mae_kwh": 30.467760840481528,
+                "daylight_rmse_kwh": 51.005155251839476,
+                "capacity_norm_daylight_mae": 0.034118433192028584,
+                "all_hour_mae_kwh": 15.357293028020216,
+                "all_hour_rmse_kwh": 36.15864667619145
+              },
+              {
+                "daylight_mae_kwh": 32.197532521560284,
+                "daylight_rmse_kwh": 54.01438335850227,
+                "capacity_norm_daylight_mae": 0.03605546754933962,
+                "all_hour_mae_kwh": 15.898854619111425,
+                "all_hour_rmse_kwh": 37.89972483089705
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.1,
+            "max_iter": 150,
+            "max_leaf_nodes": 63,
+            "min_samples_leaf": 50
+          },
+          "score": 32.24052822886474,
+          "metrics": {
+            "mean_daylight_mae": 32.24052822886474,
+            "mean_daylight_rmse": 54.16506308484253,
+            "mean_capacity_norm_daylight_mae": 0.03610361503792244,
+            "mean_all_hour_mae": 16.182375008391475,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 33.953068488875736,
+                "daylight_rmse_kwh": 56.837786175049196,
+                "capacity_norm_daylight_mae": 0.03802135329101426,
+                "all_hour_mae_kwh": 17.237677769770933,
+                "all_hour_rmse_kwh": 40.43263564860835
+              },
+              {
+                "daylight_mae_kwh": 30.710760270674246,
+                "daylight_rmse_kwh": 51.590536383893294,
+                "capacity_norm_daylight_mae": 0.03439054901531271,
+                "all_hour_mae_kwh": 15.4793955242743,
+                "all_hour_rmse_kwh": 36.5735628364345
+              },
+              {
+                "daylight_mae_kwh": 32.057755927044234,
+                "daylight_rmse_kwh": 54.066866695585105,
+                "capacity_norm_daylight_mae": 0.035898942807440354,
+                "all_hour_mae_kwh": 15.830051731129188,
+                "all_hour_rmse_kwh": 37.93654341294859
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.01,
+            "max_iter": 50,
+            "max_leaf_nodes": 63,
+            "min_samples_leaf": 10
+          },
+          "score": 131.9111684277871,
+          "metrics": {
+            "mean_daylight_mae": 131.9111684277871,
+            "mean_daylight_rmse": 147.63813317925795,
+            "mean_capacity_norm_daylight_mae": 0.14771687393929125,
+            "mean_all_hour_mae": 66.02827614035881,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 132.90008497929486,
+                "daylight_rmse_kwh": 148.66597480551107,
+                "capacity_norm_daylight_mae": 0.14882428329148362,
+                "all_hour_mae_kwh": 67.29812366672479,
+                "all_hour_rmse_kwh": 105.74619154567056
+              },
+              {
+                "daylight_mae_kwh": 128.15190962725927,
+                "daylight_rmse_kwh": 144.09356135431037,
+                "capacity_norm_daylight_mae": 0.14350717763410892,
+                "all_hour_mae_kwh": 64.44168142292934,
+                "all_hour_rmse_kwh": 102.14310064110421
+              },
+              {
+                "daylight_mae_kwh": 134.68151067680714,
+                "daylight_rmse_kwh": 150.15486337795244,
+                "capacity_norm_daylight_mae": 0.15081916089228123,
+                "all_hour_mae_kwh": 66.34502333142234,
+                "all_hour_rmse_kwh": 105.34908170992702
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.2,
+            "max_iter": 50,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 10
+          },
+          "score": 33.469986979974294,
+          "metrics": {
+            "mean_daylight_mae": 33.469986979974294,
+            "mean_daylight_rmse": 54.68874831318103,
+            "mean_capacity_norm_daylight_mae": 0.03748038855540234,
+            "mean_all_hour_mae": 16.79185778022199,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 34.323173552443635,
+                "daylight_rmse_kwh": 56.43054282635776,
+                "capacity_norm_daylight_mae": 0.03843580464999287,
+                "all_hour_mae_kwh": 17.42492570475767,
+                "all_hour_rmse_kwh": 40.143000837267046
+              },
+              {
+                "daylight_mae_kwh": 31.475183617752243,
+                "daylight_rmse_kwh": 51.61184484930804,
+                "capacity_norm_daylight_mae": 0.035246566201290304,
+                "all_hour_mae_kwh": 15.863503416210929,
+                "all_hour_rmse_kwh": 36.5886662199609
+              },
+              {
+                "daylight_mae_kwh": 34.61160376972699,
+                "daylight_rmse_kwh": 56.0238572638773,
+                "capacity_norm_daylight_mae": 0.03875879481492384,
+                "all_hour_mae_kwh": 17.08714421969736,
+                "all_hour_rmse_kwh": 39.30943360514332
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 200,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 100
+          },
+          "score": 31.53487926567001,
+          "metrics": {
+            "mean_daylight_mae": 31.53487926567001,
+            "mean_daylight_rmse": 53.327739521399224,
+            "mean_capacity_norm_daylight_mae": 0.03531341463120941,
+            "mean_all_hour_mae": 15.826711984123092,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 32.89022550173288,
+                "daylight_rmse_kwh": 55.57574843672892,
+                "capacity_norm_daylight_mae": 0.0368311595764086,
+                "all_hour_mae_kwh": 16.699951664002256,
+                "all_hour_rmse_kwh": 39.53506561834916
+              },
+              {
+                "daylight_mae_kwh": 29.696065327306307,
+                "daylight_rmse_kwh": 50.520161100584225,
+                "capacity_norm_daylight_mae": 0.033254272482985785,
+                "all_hour_mae_kwh": 14.969531013796384,
+                "all_hour_rmse_kwh": 35.81488510478386
+              },
+              {
+                "daylight_mae_kwh": 32.01834696797084,
+                "daylight_rmse_kwh": 53.88730902688454,
+                "capacity_norm_daylight_mae": 0.03585481183423386,
+                "all_hour_mae_kwh": 15.810653274570635,
+                "all_hour_rmse_kwh": 37.8105785320509
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.0,
+            "learning_rate": 0.15,
+            "max_iter": 150,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 50
+          },
+          "score": 32.647138597548256,
+          "metrics": {
+            "mean_daylight_mae": 32.647138597548256,
+            "mean_daylight_rmse": 54.035203301551086,
+            "mean_capacity_norm_daylight_mae": 0.03655894579792637,
+            "mean_all_hour_mae": 16.382715609255424,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 33.99309849755834,
+                "daylight_rmse_kwh": 56.16397251904066,
+                "capacity_norm_daylight_mae": 0.03806617972850878,
+                "all_hour_mae_kwh": 17.25793022563052,
+                "all_hour_rmse_kwh": 39.95341410517075
+              },
+              {
+                "daylight_mae_kwh": 30.713720002402557,
+                "daylight_rmse_kwh": 51.291485729684226,
+                "capacity_norm_daylight_mae": 0.034393863384549334,
+                "all_hour_mae_kwh": 15.480882732009654,
+                "all_hour_rmse_kwh": 36.36159664382512
+              },
+              {
+                "daylight_mae_kwh": 33.23459729268385,
+                "daylight_rmse_kwh": 54.65015165592836,
+                "capacity_norm_daylight_mae": 0.037216794280721,
+                "all_hour_mae_kwh": 16.40933387012609,
+                "all_hour_rmse_kwh": 38.34573516132523
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.03,
+            "max_iter": 50,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 20
+          },
+          "score": 63.65069015988231,
+          "metrics": {
+            "mean_daylight_mae": 63.65069015988231,
+            "mean_daylight_rmse": 76.51753261514348,
+            "mean_capacity_norm_daylight_mae": 0.07127736860009218,
+            "mean_all_hour_mae": 31.886749862168937,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 64.55011005578422,
+                "daylight_rmse_kwh": 77.76659391518399,
+                "capacity_norm_daylight_mae": 0.07228455773324101,
+                "all_hour_mae_kwh": 32.71769524069066,
+                "all_hour_rmse_kwh": 55.31783849902084
+              },
+              {
+                "daylight_mae_kwh": 61.01738652524202,
+                "daylight_rmse_kwh": 73.69264090362707,
+                "capacity_norm_daylight_mae": 0.06832854034181637,
+                "all_hour_mae_kwh": 30.707886865951526,
+                "all_hour_rmse_kwh": 52.239881670207566
+              },
+              {
+                "daylight_mae_kwh": 65.38457389862069,
+                "daylight_rmse_kwh": 78.09336302661936,
+                "capacity_norm_daylight_mae": 0.07321900772521914,
+                "all_hour_mae_kwh": 32.234667479864626,
+                "all_hour_rmse_kwh": 54.792311429605654
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.2,
+            "max_iter": 150,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 50
+          },
+          "score": 33.12853601341086,
+          "metrics": {
+            "mean_daylight_mae": 33.12853601341086,
+            "mean_daylight_rmse": 54.69664129950252,
+            "mean_capacity_norm_daylight_mae": 0.037098024651075985,
+            "mean_all_hour_mae": 16.6244343913046,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 34.665539802245604,
+                "daylight_rmse_kwh": 57.21729623054658,
+                "capacity_norm_daylight_mae": 0.03881919350755387,
+                "all_hour_mae_kwh": 17.598139690717655,
+                "all_hour_rmse_kwh": 40.702546735052444
+              },
+              {
+                "daylight_mae_kwh": 31.20799555812793,
+                "daylight_rmse_kwh": 51.798333631455115,
+                "capacity_norm_daylight_mae": 0.03494736344695177,
+                "all_hour_mae_kwh": 15.72924660324828,
+                "all_hour_rmse_kwh": 36.720849017859905
+              },
+              {
+                "daylight_mae_kwh": 33.51207267985904,
+                "daylight_rmse_kwh": 55.07429403650583,
+                "capacity_norm_daylight_mae": 0.037527516998722324,
+                "all_hour_mae_kwh": 16.545916879947868,
+                "all_hour_rmse_kwh": 38.64328415808126
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.03,
+            "max_iter": 100,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 100
+          },
+          "score": 38.451161487380006,
+          "metrics": {
+            "mean_daylight_mae": 38.451161487380006,
+            "mean_daylight_rmse": 57.26567781734715,
+            "mean_capacity_norm_daylight_mae": 0.043058411520022405,
+            "mean_all_hour_mae": 19.281320625918838,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 38.80228901747907,
+                "daylight_rmse_kwh": 58.907389879239524,
+                "capacity_norm_daylight_mae": 0.04345161144174588,
+                "all_hour_mae_kwh": 19.691052823662027,
+                "all_hour_rmse_kwh": 41.90456180283188
+              },
+              {
+                "daylight_mae_kwh": 36.483704632962755,
+                "daylight_rmse_kwh": 54.49231396800762,
+                "capacity_norm_daylight_mae": 0.040855212354941495,
+                "all_hour_mae_kwh": 18.38018799449671,
+                "all_hour_rmse_kwh": 38.63034446233993
+              },
+              {
+                "daylight_mae_kwh": 40.0674908116982,
+                "daylight_rmse_kwh": 58.3973296047943,
+                "capacity_norm_daylight_mae": 0.04486841076337984,
+                "all_hour_mae_kwh": 19.772721059597774,
+                "all_hour_rmse_kwh": 40.97450990584743
+              }
+            ]
+          }
+        },
+        {
+          "params": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.01,
+            "max_iter": 200,
+            "max_leaf_nodes": 31,
+            "min_samples_leaf": 10
+          },
+          "score": 49.60326469974009,
+          "metrics": {
+            "mean_daylight_mae": 49.60326469974009,
+            "mean_daylight_rmse": 64.37883578552028,
+            "mean_capacity_norm_daylight_mae": 0.05554676898067199,
+            "mean_all_hour_mae": 24.860298626120112,
+            "fold_metrics": [
+              {
+                "daylight_mae_kwh": 50.22589320070548,
+                "daylight_rmse_kwh": 65.75171264807416,
+                "capacity_norm_daylight_mae": 0.056244001344575,
+                "all_hour_mae_kwh": 25.470617882280997,
+                "all_hour_rmse_kwh": 46.772395203712506
+              },
+              {
+                "daylight_mae_kwh": 47.425358724484816,
+                "daylight_rmse_kwh": 61.70603886660752,
+                "capacity_norm_daylight_mae": 0.05310790450670192,
+                "all_hour_mae_kwh": 23.878156762011947,
+                "all_hour_rmse_kwh": 43.74350550085443
+              },
+              {
+                "daylight_mae_kwh": 51.158542174029975,
+                "daylight_rmse_kwh": 65.67875584187914,
+                "capacity_norm_daylight_mae": 0.05728840109073905,
+                "all_hour_mae_kwh": 25.23212123406739,
+                "all_hour_rmse_kwh": 46.08275505574749
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "champion_model_name": "HGB_Set_B",
+  "champion_feature_set": "B",
+  "mae_diff": 0.8125916375682145,
+  "mae_diff_pct": 2.5205428309474844,
+  "permutation_importance": [
+    {
+      "feature": "power_kw_lag_0m",
+      "mae_increase_kwh": 144.03948346461587
+    },
+    {
+      "feature": "hour_sin",
+      "mae_increase_kwh": 51.93509153515842
+    },
+    {
+      "feature": "energy_kwh_prev_day_same_hour",
+      "mae_increase_kwh": 8.255116136331774
+    },
+    {
+      "feature": "clearsky_ghi_target_wm2",
+      "mae_increase_kwh": 6.533020160927774
+    },
+    {
+      "feature": "clearsky_ghi_cloud_adj_wm2",
+      "mae_increase_kwh": 4.92104746123865
+    },
+    {
+      "feature": "hour_cos",
+      "mae_increase_kwh": 4.232789943581164
+    },
+    {
+      "feature": "tcdc_pct",
+      "mae_increase_kwh": 3.2905953172923668
+    },
+    {
+      "feature": "clearsky_index_latest_avail",
+      "mae_increase_kwh": 3.054609658969298
+    },
+    {
+      "feature": "energy_kwh_prev_week_same_hour",
+      "mae_increase_kwh": 2.615381104879765
+    },
+    {
+      "feature": "power_kw_lag_30m",
+      "mae_increase_kwh": 2.5336483857542005
+    },
+    {
+      "feature": "power_kw_last_4_mean",
+      "mae_increase_kwh": 2.2647073674633713
+    },
+    {
+      "feature": "solar_elevation_target_deg",
+      "mae_increase_kwh": 2.0882429159612186
+    },
+    {
+      "feature": "power_kw_lag_15m",
+      "mae_increase_kwh": 2.085914445647927
+    },
+    {
+      "feature": "energy_kwh_rolling_mean_24h",
+      "mae_increase_kwh": 1.9133480628418544
+    },
+    {
+      "feature": "power_kw_lag_45m",
+      "mae_increase_kwh": 0.7491472717843841
+    },
+    {
+      "feature": "day_of_year_sin",
+      "mae_increase_kwh": 0.6428284630339692
+    },
+    {
+      "feature": "tmp_c",
+      "mae_increase_kwh": 0.4815736551611574
+    },
+    {
+      "feature": "day_of_year_cos",
+      "mae_increase_kwh": 0.3506753900028097
+    },
+    {
+      "feature": "energy_kwh_rolling_mean_6h",
+      "mae_increase_kwh": 0.3496561800888382
+    },
+    {
+      "feature": "energy_kwh_latest_avail_hour",
+      "mae_increase_kwh": 0.33195662636715845
+    },
+    {
+      "feature": "clearsky_energy_target_kwh",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "production_age_minutes",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "power_kw_missing_count",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "latest_hour_missing",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "prev_day_missing",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "prev_week_missing",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "weather_run_age_hours",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "weather_fallback_used",
+      "mae_increase_kwh": 0.0
+    },
+    {
+      "feature": "weather_missing",
+      "mae_increase_kwh": 0.0
+    }
+  ]
+}

@@ -1,31 +1,34 @@
-# SolarCast Model Report: Mode F1 Candidate Models & Benchmarking
+# SolarCast Model Report: Mode F1 Candidate Models & Benchmarking (Feature Set A vs B)
 
 **Author**: Member 1 (Data, Features, Models, MLflow)  
 **Date**: November 23, 2026  
-**Commit**: `5af9c87` (working tree)  
-**Status**: Complete — Gate Passed (Eligible)
+**Commit**: `m1/hrrr-forecast-features`  
+**Status**: Complete — Gate Passed (Eligible, Selected Champion: HistGradientBoosting Set B)
 
 ---
 
 ## 1. Executive Summary
 
-This report documents the training, hyperparameter optimization, cross-validation benchmarking, and gate evaluation for **SolarCast Mode F1** (advance next-hour solar AC active energy forecasting in kWh for PV site 2107, 893 kW DC capacity).
+This report documents the training, hyperparameter optimization, cross-validation benchmarking, Feature Set A vs Feature Set B comparison, and gate evaluation for **SolarCast Mode F1** (advance next-hour solar AC active energy forecasting in kWh for PV site 2107, 893 kW DC capacity).
 
-Evaluation was conducted under strict operational constraints with `production_available_delay_minutes = 15`. Models were trained and evaluated exclusively on the **80% Train/Dev partition** (37,090 hourly intervals: 2018-07-12 00:00 UTC to 2022-10-17 00:00 UTC) across **3 expanding-window chronological folds**. The **final 20% test partition** (9,273 hourly intervals: 2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) remains **strictly locked** (`final_test_opened: false`).
+Evaluation was conducted under strict operational constraints with `production_available_delay_minutes = 15` and `weather_availability_lag_hours = 2`. Models were trained and evaluated exclusively on the **80% Train/Dev partition** (37,090 hourly intervals: 2018-07-12 00:00 UTC to 2022-10-17 00:00 UTC) across **3 expanding-window chronological folds**. The **final 20% test partition** (9,273 hourly intervals: 2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) remains **strictly locked** (`final_test_opened: false`).
 
-To ensure a fair and rigorous comparison, candidate models are benchmarked against baselines endowed with the **same information set**, specifically incorporating recent 15-minute telemetry:
-- **Baseline Champion**: **Clear-Sky Scaled 15-Minute Persistence** ($kt_{15} \times \text{ClearSky}_{\text{target}}$): Daylight MAE **42.18 kWh** (4.72% capacity), RMSE 67.61 kWh.
-- **Ridge Regression (Pipeline)**: Daylight MAE **43.52 kWh** (4.87% capacity) — achieves a -3.16% change (does not beat the 15-minute scaled baseline, though it beats hourly baselines by 42.45%).
-- **HistGradientBoostingRegressor (Winner)**: Daylight MAE **32.24 kWh** (3.61% capacity), achieving a **23.56% improvement** over the champion baseline.
+### Key Results on Identical Primary Validation Daylight Hours ($N = 13,374$):
+- **Baseline Champion**: **Clear-Sky Scaled 15-Minute Persistence** ($kt_{15} \times \text{ClearSky}_{\text{target}}$): Daylight MAE **42.09 kWh** (4.71% capacity), RMSE 67.52 kWh.
+- **Ridge Regression Set A (23 features)**: Daylight MAE **43.61 kWh** (4.88% capacity), RMSE 64.17 kWh (-3.62% vs baseline champion, rejected).
+- **Ridge Regression Set B (29 features)**: Daylight MAE **42.62 kWh** (4.77% capacity), RMSE 62.29 kWh (-1.27% vs baseline champion, rejected).
+- **HistGradientBoosting Set A (23 features)**: Daylight MAE **32.24 kWh** (3.61% capacity), RMSE 54.88 kWh (+23.40% vs baseline champion).
+- **HistGradientBoosting Set B (29 features, Selected Winner)**: Daylight MAE **31.43 kWh** (3.52% capacity), RMSE 53.35 kWh (**+25.33% improvement** vs baseline champion).
 
-The candidate gate requires $\ge 5.0\%$ daylight MAE improvement over the baseline champion ($\le 40.07\text{ kWh}$) and capacity-normalized daylight MAE $\le 20.0\%$. **HistGradientBoosting** achieved **23.56% improvement** and **3.61% cap-MAE**, passing all gate criteria and being registered as model `solarcast-f1` (version 2) in MLflow.
+### Model Selection Decision:
+Feature Set B improves upon Feature Set A by **+0.81 kWh (+2.52% relative improvement)** in Daylight MAE and **1.53 kWh** in RMSE. Because the improvement satisfies the pre-registered candidate selection rule ($\ge 1.0\%$ improvement), **HistGradientBoosting (Feature Set B)** is selected as the winning champion model. The candidate gate criteria ($\ge 5.0\%$ improvement and $\le 20.0\%$ capacity MAE) are fully satisfied (**25.33% improvement**, **3.52% cap-MAE**), qualifying the model as **ELIGIBLE** in `evaluation.json`.
 
 ---
 
 ## 2. Evaluation Protocol & Data Partitioning
 
 ### 2.1 Dataset & Time Horizon
-- **Plant**: PVDAQ Site 2107 (Denver, CO; DC Capacity: 893 kW).
+- **Plant**: PVDAQ Site 2107 (Farm Solar Array, Arbuckle, CA; DC Capacity: 893 kW, Nominal AC: 662.4 kW).
 - **Evaluation Window**: 2018-07-12 00:00 UTC to 2023-11-09 23:00 UTC (46,363 VALID hourly records).
 - **Target Variable**: Active AC Energy in kWh over $[H, H+1\text{h})$ UTC.
 - **Filtering**: Target hours must have `quality_flag == "VALID"` and not `SUSPECT_ZERO`. Daylight evaluation strictly requires midpoint solar elevation $> 0^\circ$. Night hours ($\le 0^\circ$) are deterministically predicted as $0.0\text{ kWh}$.
@@ -39,151 +42,151 @@ The candidate gate requires $\ge 5.0\%$ daylight MAE improvement over the baseli
   - Fold 2: Train 18,546 hrs $\to$ Val 9,272 hrs (2020-08 to 2021-09)
   - Fold 3: Train 27,818 hrs $\to$ Val 9,272 hrs (2021-09 to 2022-10)
 
-### 2.3 Operational Production Delay
-At forecast issue time $H$, latest plant data requires an operational acquisition delay:
-$$\text{Cutoff} = H - 15\text{ minutes}$$
-- Latest usable 15-minute interval: $[H - 30\text{m}, H - 15\text{m})$
-- Latest fully available hour: $[H - 2\text{h}, H - 1\text{h})$
+### 2.3 Operational Production & Weather Cutoff Conventions
+At forecast issue time $H$, latest plant and weather data adhere strictly to operational latency:
+- **Production cutoff**: $\text{Cutoff} = H - 15\text{ minutes}$.
+  - Latest usable 15-minute interval: $[H - 30\text{m}, H - 15\text{m})$.
+  - Latest fully available hour: $[H - 2\text{h}, H - 1\text{h})$.
+- **Weather availability constraint**: $\text{weather\_available\_at\_utc} \le H$.
+  - Nominal HRRR release lag is 2 hours ($\text{init} \le H - 2\text{h}$).
+  - When nominal run is unavailable, cascading fallback up to 8 hours age is permitted.
+  - Future weather is strictly zeroed or rejected by the pipeline.
 
 ---
 
-## 3. Feature Set A (23 Production & Clear-Sky Features)
+## 3. Feature Sets A and B
 
-Feature Set A utilizes only production telemetry, astronomical positions, and pvlib clear-sky models (no weather forecast data yet; pending HRRR extraction):
+The feature definitions are tracked under `configs/feature_schema.json` (Schema Version `1.1.0`):
 
-| # | Feature Name | Description | Units |
-|---|---|---|---|
-| 1–4 | `power_kw_lag_0m` to `45m` | 15-minute active power at $H-15\text{m}, H-30\text{m}, H-45\text{m}, H-60\text{m}$ | kW |
-| 5 | `power_kw_last_4_mean` | Average active power across the last 4 available 15-minute intervals | kW |
-| 6 | `energy_kwh_latest_avail_hour` | Energy of latest fully completed hour $[H-2\text{h}, H-1\text{h})$ | kWh |
-| 7 | `energy_kwh_prev_day_same_hour` | Energy of target hour on previous day $[H-24\text{h}, H-23\text{h})$ | kWh |
-| 8 | `energy_kwh_prev_week_same_hour` | Energy of target hour on previous week $[H-168\text{h}, H-167\text{h})$ | kWh |
-| 9 | `energy_kwh_rolling_mean_6h` | Past-only 6-hour rolling mean of hourly energy $[H-7\text{h}, H-1\text{h})$ | kWh |
-| 10 | `energy_kwh_rolling_mean_24h` | Past-only 24-hour rolling mean of hourly energy $[H-25\text{h}, H-1\text{h})$ | kWh |
-| 11–12 | `hour_sin`, `hour_cos` | Harmonic encoding of target hour of day | - |
-| 13–14 | `day_of_year_sin`, `cos` | Harmonic encoding of day of year | - |
-| 15 | `solar_elevation_target_deg` | Solar elevation angle at midpoint of target hour ($H+30\text{m}$) | deg |
-| 16 | `clearsky_ghi_target_wm2` | pvlib Ineichen clear-sky GHI at midpoint ($H+30\text{m}$) | $\text{W/m}^2$ |
-| 17 | `clearsky_energy_target_kwh` | Clear-sky expected energy ($\text{GHI} \times P95\text{ ratio}$) | kWh |
-| 18 | `clearsky_index_latest_avail` | Clear-sky index of latest available hour $[H-2\text{h}, H-1\text{h})$ | - |
-| 19 | `production_age_minutes` | Latency of latest available meter reading (nominal 15m) | min |
-| 20–23 | `power_kw_missing_count`, flags | Missingness count (0–4) and indicator flags for lags | counts / flags |
+| Group | Features | Count | Description |
+|---|---|:---:|---|
+| **Set A (Base)** | Lags `0m`, `15m`, `30m`, `45m`, `last_4_mean`; Hourly lags `latest_avail`, `prev_day`, `prev_week`; Rolling means `6h`, `24h`; Harmonics `hour_sin`, `hour_cos`, `day_of_year_sin`, `day_of_year_cos`; pvlib `solar_elevation_target_deg`, `clearsky_ghi_target_wm2`, `clearsky_energy_target_kwh`, `clearsky_index_latest_avail`; Telemetry metadata `production_age_minutes`, `power_kw_missing_count`, `latest_hour_missing`, `prev_day_missing`, `prev_week_missing` | 23 | Past-only plant generation history, astronomical calendar encodings, and pvlib clear-sky models. |
+| **Set B (Weather-Enhanced)** | All 23 features from Set A plus: `tmp_c` (2m air temperature), `tcdc_pct` (total cloud cover %), `clearsky_ghi_cloud_adj_wm2` (Kasten-Czeplak cloud-scaled clear-sky GHI), `weather_run_age_hours`, `weather_fallback_used`, `weather_missing` | 29 | Incorporates NOAA HRRR NWP point forecasts and physical cloud attenuation. |
 
 ---
 
-## 4. Hyperparameter Tuning Results
+## 4. Hyperparameter Tuning
 
 Tuning was conducted over 10 randomized configurations per model across the 3 cross-validation folds:
 
 ### 4.1 Ridge Regression (Pipeline with MedianImputer + StandardScaler)
 - **Search Space**: `alpha` $\in [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0]$, `fit_intercept` $\in \{\text{True}, \text{False}\}$.
-- **Optimal Hyperparameters**: `alpha = 0.001`, `fit_intercept = True`.
-- **Validation Daylight MAE**: **43.52 kWh** (stable across `alpha` $\le 1.0$).
+- **Optimal Hyperparameters (Set A & Set B)**: `alpha = 0.001`, `fit_intercept = True`.
+- **Validation Daylight MAE**: 43.52 kWh (Set A) $\to$ 42.67 kWh (Set B).
 
 ### 4.2 HistGradientBoostingRegressor (Native NaN Handling)
-- **Search Space**: `learning_rate` $\in [0.01, 0.03, 0.05, 0.1, 0.15, 0.2]$, `max_iter` $\in [50, 100, 150, 200]$, `max_leaf_nodes` $\in [15, 31, 63]$, `min_samples_leaf` $\in [10, 20, 50]$.
-- **Optimal Hyperparameters**:
+- **Search Space**: `learning_rate` $\in [0.01, 0.03, 0.05, 0.1, 0.15, 0.2]$, `max_iter` $\in [50, 100, 150, 200]$, `max_leaf_nodes` $\in [15, 31, 63]$, `min_samples_leaf` $\in [10, 20, 50]$, `l2_regularization` $\in [0.0, 1.0, 10.0]$.
+- **Optimal Hyperparameters (Set A & Set B)**:
   - `learning_rate`: `0.05`
   - `max_iter`: `200`
   - `max_leaf_nodes`: `31`
-  - `min_samples_leaf`: `20`
-- **Validation Daylight MAE**: **32.24 kWh** (3.61% capacity).
+  - `min_samples_leaf`: `100`
+  - `l2_regularization`: `1.0`
+- **Validation Daylight MAE**: 32.24 kWh (Set A) $\to$ 31.53 kWh (Set B).
 
 ---
 
-## 5. Model Validation Benchmark (Fair Information Set)
+## 5. Model Validation Benchmark (Set A vs Set B Comparison)
 
-To prevent unfair comparisons between models using 15-minute readings and baselines using 2-hour old hourly readings, all five baselines and both candidate models were evaluated on the exact same 3 expanding-window validation folds:
+### 5.1 Primary Evaluation: Identical Daylight Hours with Weather Available ($N = 13,374$)
 
-| Model | Daylight MAE (kWh) | Daylight RMSE (kWh) | Cap-Norm Daylight MAE | All-Hour MAE (kWh) | Improvement vs Champion Baseline | Gate Eligibility |
-|---|---|---|---|---|---|---|
-| **Clear-Sky Scaled 15-Min Persistence** (Baseline Champion) | **42.18** | **67.61** | **4.72%** | **21.15** | *Reference* | N/A |
-| **Last 15-Minute Persistence** | 88.07 | 112.82 | 9.86% | 44.10 | -108.79% | N/A |
-| **Clear-Sky Persistence (Hourly)** | 75.62 | 113.80 | 8.47% | 37.87 | -79.27% | N/A |
-| **Same-Hour Previous Day** | 75.65 | 128.37 | 8.47% | 37.86 | -79.33% | N/A |
-| **Persistence (Latest Available Hour)** | 175.73 | 216.05 | 19.68% | 87.95 | -316.59% | N/A |
-| **Ridge Regression** | 43.52 | 64.04 | 4.87% | 21.81 | -3.16% | REJECTED |
-| **HistGradientBoosting** (Winner) | **32.24** | **54.76** | **3.61%** | **16.18** | **+23.56%** | **ELIGIBLE** |
+| Model | Feature Set | Daylight MAE (kWh) | Daylight RMSE (kWh) | Cap-Norm MAE (%) | vs Baseline Champion (%) | vs Set A HGB (%) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Clear-Sky Scaled 15m Persistence** | Baseline | 42.09 | 67.52 | 4.71% | *Reference* | -30.55% |
+| **Ridge Regression** | Set A (23) | 43.61 | 64.17 | 4.88% | -3.62% | -35.28% |
+| **Ridge Regression** | Set B (29) | 42.62 | 62.29 | 4.77% | -1.27% | -32.21% |
+| **HistGradientBoosting** | Set A (23) | 32.24 | 54.88 | 3.61% | +23.40% | *Reference* |
+| **HistGradientBoosting** | **Set B (29)** | **31.43** | **53.35** | **3.52%** | **+25.33%** | **+2.52%** |
 
-### Key Observations:
-1. **The Fair Baseline Champion**: Clear-sky scaling of the latest 15-minute reading cuts the persistence baseline error nearly in half (from 75.62 kWh down to 42.18 kWh).
-2. **Linear Ridge Underperforms Non-linear Baseline**: Ridge Regression (43.52 kWh) cannot match the multiplicative interaction of the 15-minute clear-sky baseline (42.18 kWh), failing the gate.
-3. **HistGradientBoosting Wins Decisively**: HistGradientBoosting (32.24 kWh) outperforms the 15-minute clear-sky baseline by **23.56%** (and beats Ridge by 25.9%), proving that gradient boosted trees successfully discover non-linear combinations of recent generation slopes and astronomical coordinates that simple heuristics cannot capture.
-
----
-
-## 6. Feature Importance Analysis (Permutation Importance)
-
-Permutation feature importance was evaluated for `HistGradientBoostingRegressor` on the out-of-fold validation sets across all 3 folds (shuffling each feature 5 times and measuring the degradation in Daylight MAE):
-
-| Rank | Feature Name | Daylight MAE Increase (kWh) | Plain-Language Explanation |
-|:---:|---|:---:|---|
-| **1** | `power_kw_lag_0m` | **+116.92** | **Most Recent Inverter Power**: Active power in the 15-minute interval right before cutoff is by far the single most critical predictor. Shuffling it destroys the recent weather/generation baseline, increasing error by 116.9 kWh. |
-| **2** | `hour_sin` | **+40.97** | **Diurnal Cycle Timing**: Captures whether the solar plant is on an upward morning ramp, midday plateau, or evening ramp. |
-| **3** | `energy_kwh_prev_day_same_hour` | **+15.03** | **Yesterday's Generation Baseline**: Provides multi-day weather persistence (e.g. continuous clear summer heat dome vs cloudy monsoon week). |
-| **4** | `clearsky_ghi_target_wm2` | **+11.33** | **Clear-Sky Irradiance Ceiling**: Theoretical astronomical maximum solar irradiance reaching the horizontal plane at target hour midpoint. |
-| **5** | `power_kw_lag_30m` | **+7.67** | **Power Rate-of-Change**: Allows the model to compute recent ramps (cloud incoming vs cloud clearing) across 30 minutes. |
-| **6** | `hour_cos` | **+7.62** | **Diurnal Phase Alignment**: Complements `hour_sin` to resolve exact solar time without ambiguity. |
-| **7** | `energy_kwh_prev_week_same_hour` | **+5.77** | **Seasonal Reference**: Tracks the seasonal shift in generation for that specific solar hour. |
-| **8** | `clearsky_index_latest_avail` | **+3.91** | **Atmospheric Clearness Ratio**: Measures cloud attenuation observed during the last fully available hour. |
-| **9** | `power_kw_lag_15m` | **+2.99** | **Intermediate Lag**: Refines the short-term generation slope between lag 0m and lag 30m. |
-| **10** | `energy_kwh_rolling_mean_24h` | **+2.84** | **Daily Energy Regime**: Quantifies overall plant productivity over the past 24 hours. |
+### 5.2 All Daylight Hours Including Missing Weather Hours ($N = 13,914$)
+In the 540 validation daylight hours where HRRR weather was missing/unobtainable (`weather_missing == 1`), Set B gracefully routed NaNs via native tree branching:
+- **Baseline Champion**: Daylight MAE 42.18 kWh, RMSE 67.62 kWh
+- **HistGradientBoosting Set A**: Daylight MAE 32.24 kWh, RMSE 54.83 kWh
+- **HistGradientBoosting Set B**: Daylight MAE **31.53 kWh**, RMSE **53.37 kWh** (+2.20% improvement over Set A)
 
 ---
 
-## 7. Monthly Performance Breakdown
+## 6. Detailed Stratification: Does Weather Help?
 
-Validation daylight MAE (kWh) across representative months on the out-of-fold validation set:
+To understand how and where weather forecasts help, performance was stratified by forecast cloud cover and calendar month.
 
-| Month | Daylight Hours | Clear-Sky 15m Baseline (kWh) | Ridge MAE (kWh) | HistGradientBoosting MAE (kWh) |
-|---|---|---|---|---|
-| 2019-08 | 389 | 24.12 | 27.29 | **18.56** |
-| 2019-12 | 302 | 52.19 | 61.66 | **43.11** |
-| 2020-01 | 276 | 68.45 | 66.62 | **59.66** |
-| 2020-04 | 397 | 45.80 | 48.26 | **37.99** |
-| 2020-07 | 446 | 16.32 | 25.94 | **12.11** |
-| 2021-01 | 294 | 67.80 | 70.70 | **55.07** |
-| 2021-06 | 437 | 25.10 | 35.18 | **19.95** |
-| 2021-12 | 302 | 53.40 | 60.21 | **42.71** |
-| 2022-07 | 447 | 26.50 | 32.33 | **20.36** |
+### 6.1 Stratified Performance by Forecast Cloud Cover Bin ($N = 13,374$)
+
+| Cloud Cover Regime | Hours ($N$) | Baseline Champion (kWh) | HGB Set A (kWh) | HGB Set B (kWh) | Diff (A - B) (kWh) | Relative Gain (%) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Clear / Low Cloud ($< 20\%$)** | 9,843 (73.6%) | 36.66 | 25.55 | **24.12** | **+1.43** | **+5.59%** |
+| **Mixed / Mid Cloud ($20\% - 80\%$)** | 1,664 (12.4%) | 59.77 | **49.46** | 54.26 | **-4.80** | **-9.70%** |
+| **Overcast / High Cloud ($> 80\%$)** | 1,867 (14.0%) | 54.94 | 52.17 | **49.60** | **+2.58** | **+4.94%** |
+
+#### Critical Finding & Physical Explanation:
+1. **Clear Sky ($< 20\%$)**: Weather features provide a consistent **+5.59%** gain. The 2m temperature feature enables the tree model to account for PV panel thermal derating (efficiency loss at high cell temperatures during hot California summer afternoons).
+2. **Overcast Sky ($> 80\%$)**: Weather features provide a **+4.94%** gain. The Kasten-Czeplak cloud adjustment (`clearsky_ghi_cloud_adj_wm2`) and `tcdc_pct` signal strong frontal cloud attenuation ahead of time.
+3. **Mixed Clouds ($20\% - 80\%$) — Degradation**: Weather features make the model **-9.70% WORSE** (MAE increases by 4.80 kWh).
+   - *Cause*: NWP spatial and temporal phase timing error. In scattered or convective cloud regimes, a 3-km numerical weather model frequently misjudges the exact minute a cloud passes directly over an 893 kW collector field. If HRRR predicts 60% cloud cover but the sun shines through a gap, or predicts clear sky while a cumulus cloud shades the array, the weather features pull the prediction in the wrong direction. By contrast, Set A's recent 15-minute telemetry (`power_kw_lag_0m`) directly senses the current ground-level shading state.
+
+### 6.2 Monthly Breakdown
+Across the 39 out-of-fold validation months:
+- **Set B beats Set A in 30 out of 39 months (76.9% of months)**. Major gains occur during frontal winter rain/cloud events (e.g., Dec 2021: +11.44%, Nov 2019: +9.64%, Mar 2020: +9.25%, Feb 2022: +6.44%).
+- **Set A beats Set B in 9 months (23.1% of months)**, primarily during spring and late summer transition months with broken convective cloudiness (e.g., Sept 2020: -4.84%, Aug 2020: -3.98%, Apr 2022: -3.60%, May 2020: -3.09%, Sept 2021: -3.38%).
+
+---
+
+## 7. Permutation Feature Importance for Selected Model (HGB Set B)
+
+Computed across 5 permutation iterations on out-of-fold validation data across all 3 folds:
+
+| Rank | Feature Name | Daylight MAE Increase (kWh) | Category | Explanation |
+|:---:|---|:---:|:---:|---|
+| **1** | `power_kw_lag_0m` | **+144.04** | Telemetry | **Most Recent Inverter Power**: Active power ending at $H-15\text{m}$ is by far the single dominant predictor. Shuffling it destroys immediate plant state. |
+| **2** | `hour_sin` | **+51.94** | Astronomy | **Diurnal Cycle Timing**: Captures solar elevation ramp direction (morning vs afternoon). |
+| **3** | `energy_kwh_prev_day_same_hour` | **+8.26** | History | **Yesterday's Generation**: Captures multi-day weather persistence. |
+| **4** | `clearsky_ghi_target_wm2` | **+6.53** | Clear-Sky | **Theoretical Irradiance Ceiling**: pvlib extraterrestrial clear-sky baseline. |
+| **5** | `clearsky_ghi_cloud_adj_wm2` | **+4.92** | **Weather (NWP)** | **Cloud-Adjusted Irradiance**: Kasten-Czeplak parameterization combining clear-sky GHI with HRRR total cloud cover. Top-ranked weather feature. |
+| **6** | `hour_cos` | **+4.23** | Astronomy | **Diurnal Phase**: Resolves exact time of day symmetry. |
+| **7** | `tcdc_pct` | **+3.29** | **Weather (NWP)** | **Total Cloud Cover Forecast**: Direct numerical forecast percentage from HRRR. |
+| **8** | `clearsky_index_latest_avail` | **+3.05** | Telemetry | **Past Clearness Index**: Observed cloudiness in the latest fully available hour $[H-2\text{h}, H-1\text{h})$. |
+| **9** | `energy_kwh_prev_week_same_hour` | **+2.62** | History | **Seasonal Day-of-Week Reference**. |
+| **10** | `power_kw_lag_30m` | **+2.53** | Telemetry | **Short-Term Ramp Rate**: Captures rapid cloud entry/exit over 30 minutes. |
+| **17** | `tmp_c` | **+0.50** | **Weather (NWP)** | **Ambient Temperature**: Modulates PV module temperature and thermal derating. |
+| **24–29** | Metadata flags (`weather_missing`, `weather_run_age_hours`, etc.) | **$\approx 0.00$** | Metadata | Informative routing indicators for edge cases. |
 
 ---
 
 ## 8. Acceptance Gate Evaluation (`evaluation.json`)
 
 The formal candidate acceptance criteria defined in `configs/evaluation.yaml`:
-1. **Daylight MAE Improvement**: $\ge 5.0\%$ reduction vs baseline champion ($\le 40.07\text{ kWh}$).
+1. **Daylight MAE Improvement**: $\ge 5.0\%$ reduction vs baseline champion.
 2. **Capacity-Normalized MAE**: $\le 20.0\%$ (0.20).
 3. **Physical Feasibility**: Strictly finite, non-negative, and $\le 893.0\text{ kWh}$.
+4. **Final Test Safeguard**: Final test partition unopened (`final_test_opened: false`).
 
-### Outcome:
 ```json
 {
   "eligible": true,
   "required_improvement_pct": 5.0,
-  "achieved_improvement_pct": 23.56,
+  "achieved_improvement_pct": 25.33,
   "thresholds": {
-    "max_daylight_mae_kwh": 40.07,
+    "max_daylight_mae_kwh": 39.98,
     "max_capacity_norm_daylight_mae": 0.2,
     "capacity_limit_kwh": 893.0
   },
   "baseline_metrics": {
-    "daylight_mae_kwh": 42.1841,
-    "daylight_rmse_kwh": 67.6055,
-    "capacity_norm_daylight_mae": 0.0472,
+    "daylight_mae_kwh": 42.0891,
+    "daylight_rmse_kwh": 67.5237,
+    "capacity_norm_daylight_mae": 0.0471,
     "all_hour_mae_kwh": 21.15,
-    "all_hour_rmse_kwh": 47.8138
+    "all_hour_rmse_kwh": 47.8266
   },
   "candidate_metrics": {
-    "daylight_mae_kwh": 32.2446,
-    "daylight_rmse_kwh": 54.7602,
-    "capacity_norm_daylight_mae": 0.0361,
-    "all_hour_mae_kwh": 16.1815,
-    "all_hour_rmse_kwh": 38.7329
+    "daylight_mae_kwh": 31.4262,
+    "daylight_rmse_kwh": 53.3511,
+    "capacity_norm_daylight_mae": 0.0352,
+    "all_hour_mae_kwh": 15.8267,
+    "all_hour_rmse_kwh": 37.7508
   },
   "failure_reasons": [],
   "final_test_opened": false,
-  "candidate_model_name": "HistGradientBoosting",
+  "candidate_model_name": "HistGradientBoosting_Set_B",
   "baseline_champion_name": "Clear-Sky Scaled 15-Minute Persistence"
 }
 ```
@@ -191,21 +194,25 @@ The formal candidate acceptance criteria defined in `configs/evaluation.yaml`:
 
 ---
 
-## 9. Diagnostic Plots
-
-Diagnostic artifacts generated and tracked in MLflow (`reports/plots/`):
-- `actual_vs_predicted.png`: Out-of-fold scatter plot showing tight clustering along the 1:1 diagonal with daylight MAE annotation.
-- `residuals.png`: Error distribution centered at zero ($\mu = 0.52\text{ kWh}$) with symmetric tails.
-- `error_by_hour.png`: MAE profile by UTC hour, confirming 0 nighttime error and peak error during solar noon convective hours.
-- `error_by_month.png`: Seasonal MAE progression highlighting winter cloud challenges.
-
----
-
-## 10. Model Artifacts & MLflow Lineage
+## 9. Model Artifacts & MLflow Lineage
 
 - **MLflow Tracking URI**: `file:./mlruns`
 - **Experiment**: `solarcast-model-training`
-- **Candidate Run**: `HistGradientBoosting_SetA_15mDelay` (`7b64f8c9349e4943bbeb094672fabb80`)
-- **Registered Model**: `solarcast-f1` (Version 2, status: `candidate`)
-- **Rejected Run**: `Ridge_SetA_15mDelay` (`01f1b17d58694fcf9afc91d071e27e0a`, status: `rejected`, improvement: -3.16%)
-- **Model Bundle**: `models/solarcast_f1_bundle.joblib` (439 KB) containing estimator, feature schema, data hashes, and bounded inference methods.
+- **Winning Candidate Run**: `HistGradientBoosting_Set_B_15mDelay`
+- **Registered Model**: `solarcast-f1` (Version 4, status: `candidate`)
+- **Benchmark Comparison Runs**:
+  - `Ridge_Set_A_15mDelay` (status: `rejected`)
+  - `HistGradientBoosting_Set_A_15mDelay` (status: `rejected`)
+  - `Ridge_Set_B_15mDelay` (status: `rejected`)
+- **Model Bundle**: `models/solarcast_f1_bundle.joblib`
+  - Dataclass: `ModelBundle`
+  - `feature_set`: `"B"`
+  - `needs_weather`: `True`
+  - `feature_schema_version`: `"1.1.0"`
+  - `feature_names`: 29 canonical features
+  - Bounded inference: deterministic zeroing at night, clipping to $[0.0, 893.0\text{ kWh}]$, optional standalone `weather_df` merging.
+- **Diagnostic Plots (`reports/plots/`)**:
+  - `actual_vs_predicted.png`: Out-of-fold validation scatter with 1:1 diagonal.
+  - `residuals.png`: Error histogram centered near zero with symmetric dispersion.
+  - `error_by_hour.png`: Diurnal MAE profile showing zero nighttime error.
+  - `error_by_month.png`: 39-month out-of-fold MAE tracking.

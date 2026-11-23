@@ -2,6 +2,7 @@
 
 Executes Step 2 (Model Training & Benchmarking), Step 3 (Gate Verification),
 Step 4 (MLflow Tracking), and Step 5 (Model Bundling).
+Supports both Feature Set A (23 features) and Feature Set B (29 features with HRRR weather).
 """
 
 from __future__ import annotations
@@ -10,9 +11,12 @@ import argparse
 import hashlib
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -23,6 +27,7 @@ import yaml
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.features.preprocessing import build_features
+from src.models.baselines import ClearSky15mPersistence
 from src.models.bundle import ModelBundle, save_bundle
 from src.models.evaluate import (
     compute_evaluation_metrics,
@@ -34,6 +39,7 @@ from src.models.tune import (
     build_hgb_model,
     build_ridge_pipeline,
     get_feature_columns_a,
+    get_feature_columns_b,
     tune_models,
 )
 
@@ -42,19 +48,12 @@ DEFAULT_PARAMS_CONFIG = Path("configs/model_params.yaml")
 DEFAULT_SCHEMA_CONFIG = Path("configs/feature_schema.json")
 DEFAULT_HOURLY_PATH = Path("data/processed/hourly.parquet")
 DEFAULT_QH_PATH = Path("data/processed/quarter_hourly.parquet")
+DEFAULT_WEATHER_PATH = Path("data/processed/hrrr_forecast_features.parquet")
 DEFAULT_REPORTS_DIR = Path("reports")
 DEFAULT_MODELS_DIR = Path("models")
 DEFAULT_PLOTS_DIR = Path("reports/plots")
 
-# Champion baseline reference (3-fold cross-validation, 15m delay)
 BASELINE_CHAMPION_NAME = "Clear-Sky Scaled 15-Minute Persistence"
-BASELINE_CHAMPION_METRICS = {
-    "daylight_mae_kwh": 42.1841,
-    "daylight_rmse_kwh": 67.6055,
-    "capacity_norm_daylight_mae": 0.04724,
-    "all_hour_mae_kwh": 21.1500,
-    "all_hour_rmse_kwh": 47.8138,
-}
 
 
 def compute_file_sha256(file_path: Path | str) -> str:
@@ -89,7 +88,7 @@ def generate_evaluation_plots(
     timestamps_all: pd.DatetimeIndex,
     is_daylight_all: np.ndarray,
     output_dir: Path | str = DEFAULT_PLOTS_DIR,
-    model_name: str = "HistGradientBoosting",
+    model_name: str = "HistGradientBoosting_Set_B",
 ) -> dict[str, Path]:
     """Generate diagnostic evaluation plots for candidate model."""
     out_dir = Path(output_dir)
@@ -176,6 +175,7 @@ def run_training_pipeline(
     params_config_path: Path | str = DEFAULT_PARAMS_CONFIG,
     hourly_path: Path | str = DEFAULT_HOURLY_PATH,
     quarter_hourly_path: Path | str = DEFAULT_QH_PATH,
+    weather_path: Path | str = DEFAULT_WEATHER_PATH,
     reports_dir: Path | str = DEFAULT_REPORTS_DIR,
     models_dir: Path | str = DEFAULT_MODELS_DIR,
     tracking_uri: str | None = None,
@@ -196,9 +196,10 @@ def run_training_pipeline(
     data_hashes = {
         "hourly_parquet": compute_file_sha256(hourly_path),
         "quarter_hourly_parquet": compute_file_sha256(quarter_hourly_path),
+        "hrrr_forecast_features_parquet": compute_file_sha256(weather_path),
     }
     git_commit = get_git_commit()
-    feature_schema_version = str(eval_cfg.get("schema_version", "1.0.0"))
+    feature_schema_version = "1.1.0"
     delay_min = int(
         eval_cfg.get("operational_timing", {}).get("production_available_delay_minutes", 15)
     )
@@ -209,6 +210,7 @@ def run_training_pipeline(
     df_h = pd.read_parquet(hourly_path)
     df_h["interval_start_utc"] = pd.to_datetime(df_h["interval_start_utc"], utc=True)
     df_qh = pd.read_parquet(quarter_hourly_path)
+    df_w = pd.read_parquet(weather_path) if Path(weather_path).exists() else pd.DataFrame()
 
     win_start = pd.Timestamp(eval_cfg["evaluation_window"]["start_utc"], tz="UTC")
     win_end = pd.Timestamp(eval_cfg["evaluation_window"]["end_utc"], tz="UTC")
@@ -233,154 +235,225 @@ def run_training_pipeline(
         f"({t_test_start} to {t_test_end})"
     )
 
-    # 3. Build Feature Matrix for Train/Dev
-    print(f"Extracting 23 features with operational delay = {delay_min} minutes...")
+    # 3. Build Feature Matrices for Train/Dev
     feat_cfg = {"operational_timing": {"production_available_delay_minutes": delay_min}}
-    feats_dev = build_features(
+    print(f"Extracting Feature Set A (23 features, delay = {delay_min} min)...")
+    feats_dev_a = build_features(
         dev_df["interval_start_utc"],
         hourly_df=df_h,
         quarter_hourly_df=df_qh,
         config=feat_cfg,
+        feature_set="A",
     )
-    dev_full = pd.concat([dev_df, feats_dev.reset_index(drop=True)], axis=1)
-    feature_cols = get_feature_columns_a()
+    dev_full_a = pd.concat([dev_df, feats_dev_a.reset_index(drop=True)], axis=1)
+    cols_a = get_feature_columns_a()
 
-    # 4. Tune Models (10 iterations each across 3 folds)
-    tune_results = tune_models(
-        dev_full=dev_full,
-        params_config_path=params_config_path,
-        n_splits=3,
+    print(f"Extracting Feature Set B (29 features, delay = {delay_min} min)...")
+    feats_dev_b = build_features(
+        dev_df["interval_start_utc"],
+        hourly_df=df_h,
+        quarter_hourly_df=df_qh,
+        weather_df=df_w,
+        config=feat_cfg,
+        feature_set="B",
     )
+    dev_full_b = pd.concat([dev_df, feats_dev_b.reset_index(drop=True)], axis=1)
+    cols_b = get_feature_columns_b()
 
-    # 5. Extract Detailed Validation Predictions for Both Champion Candidates
+    # 4. Tune Models on Set A and Set B
+    print("\n--- Tuning Models on Feature Set A ---")
+    tune_a = tune_models(dev_full_a, params_config_path=params_config_path, feature_set="A")
+
+    print("\n--- Tuning Models on Feature Set B ---")
+    tune_b = tune_models(dev_full_b, params_config_path=params_config_path, feature_set="B")
+
+    # 5. Cross-Validation on Identical 3 Folds
     tscv = TimeSeriesSplit(n_splits=3)
     seed = int(params_cfg.get("random_seed", 42))
+    baseline_model = ClearSky15mPersistence(delay_minutes=delay_min)
 
     models_to_benchmark = {
-        "Ridge": {
-            "factory": lambda: build_ridge_pipeline(
-                tune_results["ridge"]["best_params"], random_seed=seed
-            ),
-            "params": tune_results["ridge"]["best_params"],
-            "type": "Ridge",
+        "Baseline_Champion": {
+            "type": "Baseline",
+            "feature_set": "Baseline",
+            "is_baseline": True,
+            "params": {"delay_minutes": delay_min},
         },
-        "HistGradientBoosting": {
-            "factory": lambda: build_hgb_model(
-                tune_results["hist_gradient_boosting"]["best_params"], random_seed=seed
+        "Ridge_Set_A": {
+            "type": "Ridge",
+            "feature_set": "A",
+            "is_baseline": False,
+            "cols": cols_a,
+            "df": dev_full_a,
+            "params": tune_a["ridge"]["best_params"],
+            "factory": lambda: build_ridge_pipeline(
+                tune_a["ridge"]["best_params"], random_seed=seed
             ),
-            "params": tune_results["hist_gradient_boosting"]["best_params"],
+        },
+        "HistGradientBoosting_Set_A": {
             "type": "HistGradientBoostingRegressor",
+            "feature_set": "A",
+            "is_baseline": False,
+            "cols": cols_a,
+            "df": dev_full_a,
+            "params": tune_a["hist_gradient_boosting"]["best_params"],
+            "factory": lambda: build_hgb_model(
+                tune_a["hist_gradient_boosting"]["best_params"], random_seed=seed
+            ),
+        },
+        "Ridge_Set_B": {
+            "type": "Ridge",
+            "feature_set": "B",
+            "is_baseline": False,
+            "cols": cols_b,
+            "df": dev_full_b,
+            "params": tune_b["ridge"]["best_params"],
+            "factory": lambda: build_ridge_pipeline(
+                tune_b["ridge"]["best_params"], random_seed=seed
+            ),
+        },
+        "HistGradientBoosting_Set_B": {
+            "type": "HistGradientBoostingRegressor",
+            "feature_set": "B",
+            "is_baseline": False,
+            "cols": cols_b,
+            "df": dev_full_b,
+            "params": tune_b["hist_gradient_boosting"]["best_params"],
+            "factory": lambda: build_hgb_model(
+                tune_b["hist_gradient_boosting"]["best_params"], random_seed=seed
+            ),
         },
     }
 
-    benchmark_records: dict[str, dict[str, Any]] = {}
+    predictions = {name: [] for name in models_to_benchmark}
+    val_targets = []
+    val_times = []
+    val_daylight = []
+    val_weather_missing = []
 
-    for m_label, m_spec in models_to_benchmark.items():
-        all_y_true = []
-        all_y_pred = []
-        all_times = []
-        all_daylight = []
-        fold_evals = []
+    for fold_num, (train_idx, val_idx) in enumerate(tscv.split(dev_df), 1):
+        print(f"Evaluating fold {fold_num}/3 (Train: {len(train_idx)}, Val: {len(val_idx)})...")
+        val_sub_b = dev_full_b.iloc[val_idx]
+        y_val = val_sub_b["target_kwh"].values
+        is_day = (val_sub_b["solar_elevation_target_deg"] > 0).values
+        w_miss = val_sub_b["weather_missing"].values
 
-        for _fold_num, (train_idx, val_idx) in enumerate(tscv.split(dev_full), 1):
-            train_df = dev_full.iloc[train_idx]
-            val_df = dev_full.iloc[val_idx]
+        val_targets.append(y_val)
+        val_times.append(val_sub_b["interval_start_utc"].values)
+        val_daylight.append(is_day)
+        val_weather_missing.append(w_miss)
 
-            # Train daylight mask
-            tr_day_mask = (
-                (train_df["quality_flag"] == "VALID")
-                & (train_df["solar_elevation_target_deg"] > 0)
+        # Baseline
+        preds_base = baseline_model.predict(val_sub_b)
+        predictions["Baseline_Champion"].append(preds_base)
+
+        # ML models
+        for name, spec in models_to_benchmark.items():
+            if spec.get("is_baseline"):
+                continue
+            df_curr = spec["df"]
+            cols_curr = spec["cols"]
+
+            tr_sub = df_curr.iloc[train_idx]
+            v_sub = df_curr.iloc[val_idx]
+
+            tr_mask = (
+                (tr_sub["quality_flag"] == "VALID")
+                & (tr_sub["solar_elevation_target_deg"] > 0)
             )
-            if "SUSPECT_ZERO" in train_df["quality_flag"].values:
-                tr_day_mask = tr_day_mask & (train_df["quality_flag"] != "SUSPECT_ZERO")
+            if "SUSPECT_ZERO" in tr_sub["quality_flag"].values:
+                tr_mask = tr_mask & (tr_sub["quality_flag"] != "SUSPECT_ZERO")
 
-            X_tr = train_df.loc[tr_day_mask, feature_cols].values
-            y_tr = train_df.loc[tr_day_mask, "target_kwh"].values
+            X_tr = tr_sub.loc[tr_mask, cols_curr].values
+            y_tr = tr_sub.loc[tr_mask, "target_kwh"].values
 
-            model = m_spec["factory"]()
-            model.fit(X_tr, y_tr)
+            clf = spec["factory"]()
+            clf.fit(X_tr, y_tr)
 
-            X_v = val_df[feature_cols].values
-            y_v = val_df["target_kwh"].values
-            is_day_v = (val_df["solar_elevation_target_deg"] > 0).values
+            X_v = v_sub[cols_curr].values
+            raw_v = clf.predict(X_v)
+            preds_v = np.where(is_day, raw_v, 0.0)
+            preds_v = np.clip(preds_v, 0.0, cap_limit)
+            predictions[name].append(preds_v)
 
-            raw_preds = model.predict(X_v)
-            preds = np.where(is_day_v, raw_preds, 0.0)
-            preds = np.clip(preds, 0.0, cap_limit)
+    # Concatenate across folds
+    y_true_concat = np.concatenate(val_targets)
+    times_concat = pd.DatetimeIndex(np.concatenate(val_times))
+    daylight_concat = np.concatenate(val_daylight)
+    w_missing_concat = np.concatenate(val_weather_missing)
 
-            fold_m = compute_evaluation_metrics(y_v, preds, is_day_v, cap_limit)
-            fold_evals.append(fold_m)
+    preds_concat = {k: np.concatenate(v) for k, v in predictions.items()}
 
-            all_y_true.append(y_v)
-            all_y_pred.append(preds)
-            all_times.append(pd.DatetimeIndex(val_df["interval_start_utc"]))
-            all_daylight.append(is_day_v)
+    # Primary mask: daylight hours where weather is present
+    primary_mask = daylight_concat & (w_missing_concat == 0)
 
-        concat_y_true = np.concatenate(all_y_true)
-        concat_y_pred = np.concatenate(all_y_pred)
-        concat_times = pd.DatetimeIndex(np.concatenate([t.values for t in all_times]))
-        concat_daylight = np.concatenate(all_daylight)
-
-        # Average across folds
-        mean_daylight_mae = float(np.mean([m["daylight_mae_kwh"] for m in fold_evals]))
-        mean_daylight_rmse = float(np.mean([m["daylight_rmse_kwh"] for m in fold_evals]))
-        mean_cap_norm = float(np.mean([m["capacity_norm_daylight_mae"] for m in fold_evals]))
-        mean_all_hour_mae = float(np.mean([m["all_hour_mae_kwh"] for m in fold_evals]))
-        mean_all_hour_rmse = float(np.mean([m["all_hour_rmse_kwh"] for m in fold_evals]))
-
-        monthly_mae_df = compute_monthly_daylight_mae(
-            concat_y_true, concat_y_pred, concat_times, concat_daylight
+    # Compute metrics for all models on primary hours
+    benchmark_records: dict[str, dict[str, Any]] = {}
+    for name, spec in models_to_benchmark.items():
+        m_day = compute_evaluation_metrics(
+            y_true_concat, preds_concat[name], primary_mask, cap_limit
         )
-
-        benchmark_records[m_label] = {
-            "type": m_spec["type"],
-            "params": m_spec["params"],
-            "factory": m_spec["factory"],
-            "metrics": {
-                "daylight_mae_kwh": mean_daylight_mae,
-                "daylight_rmse_kwh": mean_daylight_rmse,
-                "capacity_norm_daylight_mae": mean_cap_norm,
-                "all_hour_mae_kwh": mean_all_hour_mae,
-                "all_hour_rmse_kwh": mean_all_hour_rmse,
-            },
-            "fold_evals": fold_evals,
-            "monthly_mae_df": monthly_mae_df,
-            "y_true": concat_y_true,
-            "y_pred": concat_y_pred,
-            "timestamps": concat_times,
-            "is_daylight": concat_daylight,
+        monthly_df = compute_monthly_daylight_mae(
+            y_true_concat, preds_concat[name], times_concat, primary_mask
+        )
+        benchmark_records[name] = {
+            "type": spec["type"],
+            "feature_set": spec["feature_set"],
+            "params": spec["params"],
+            "factory": spec.get("factory"),
+            "cols": spec.get("cols", cols_b),
+            "metrics": m_day,
+            "monthly_mae_df": monthly_df,
+            "y_true": y_true_concat,
+            "y_pred": preds_concat[name],
+            "timestamps": times_concat,
+            "is_daylight": primary_mask,
         }
 
-    # 6. Select Best Candidate Model
-    best_candidate_name = min(
-        benchmark_records.keys(),
-        key=lambda k: benchmark_records[k]["metrics"]["daylight_mae_kwh"],
-    )
-    best_candidate = benchmark_records[best_candidate_name]
+    base_metrics = benchmark_records["Baseline_Champion"]["metrics"]
+    hgb_a_metrics = benchmark_records["HistGradientBoosting_Set_A"]["metrics"]
+    hgb_b_metrics = benchmark_records["HistGradientBoosting_Set_B"]["metrics"]
 
+    # 6. Model Selection Rule: Set A vs Set B
+    diff_mae = hgb_a_metrics["daylight_mae_kwh"] - hgb_b_metrics["daylight_mae_kwh"]
+    diff_mae_pct = (diff_mae / hgb_a_metrics["daylight_mae_kwh"]) * 100.0
+
+    n_pri = primary_mask.sum()
+    n_tot = daylight_concat.sum()
     print("\n=======================================================")
-    print("MODEL VALIDATION BENCHMARK (3-FOLD CROSS VALIDATION)")
+    print("MODEL VALIDATION BENCHMARK (IDENTICAL DAYLIGHT HOURS)")
+    print(f"Weather Present Hours N = {n_pri:,} / Total Daylight = {n_tot:,}")
     print("=======================================================")
-    print(
-        f"Baseline Champion: {BASELINE_CHAMPION_NAME:25s} | "
-        f"Daylight MAE: {BASELINE_CHAMPION_METRICS['daylight_mae_kwh']:.2f} kWh "
-        f"({BASELINE_CHAMPION_METRICS['capacity_norm_daylight_mae']*100:.2f}% cap) | "
-        f"RMSE: {BASELINE_CHAMPION_METRICS['daylight_rmse_kwh']:.2f} kWh"
-    )
-    for name, rec in benchmark_records.items():
-        m = rec["metrics"]
-        print(
-            f"Candidate:         {name:25s} | "
-            f"Daylight MAE: {m['daylight_mae_kwh']:.2f} kWh "
-            f"({m['capacity_norm_daylight_mae']*100:.2f}% cap) | "
-            f"RMSE: {m['daylight_rmse_kwh']:.2f} kWh | "
-            f"All-Hour MAE: {m['all_hour_mae_kwh']:.2f} kWh"
-        )
+    base_cap = base_metrics["capacity_norm_daylight_mae"] * 100
+    hgb_a_cap = hgb_a_metrics["capacity_norm_daylight_mae"] * 100
+    hgb_b_cap = hgb_b_metrics["capacity_norm_daylight_mae"] * 100
+    b_mae = base_metrics["daylight_mae_kwh"]
+    a_mae = hgb_a_metrics["daylight_mae_kwh"]
+    s_mae = hgb_b_metrics["daylight_mae_kwh"]
+    print(f"Baseline Champion: Daylight MAE = {b_mae:.2f} kWh ({base_cap:.2f}%)")
+    print(f"HGB Set A:         Daylight MAE = {a_mae:.2f} kWh ({hgb_a_cap:.2f}%)")
+    print(f"HGB Set B:         Daylight MAE = {s_mae:.2f} kWh ({hgb_b_cap:.2f}%)")
+    print(f"Set B vs Set A:    Difference = {diff_mae:+.2f} kWh ({diff_mae_pct:+.2f}%)")
+
+    if diff_mae_pct >= 1.0:
+        best_candidate_name = "HistGradientBoosting_Set_B"
+        selected_feature_set = "B"
+        selected_cols = cols_b
+        selected_dev_df = dev_full_b
+        print("Selection: Set B improves upon Set A by >= 1.0%. Selected: HGB Set B.")
+    else:
+        best_candidate_name = "HistGradientBoosting_Set_A"
+        selected_feature_set = "A"
+        selected_cols = cols_a
+        selected_dev_df = dev_full_a
+        print("Selection: Difference < 1.0%. Selected champion: HistGradientBoosting (Set A).")
+
+    best_candidate = benchmark_records[best_candidate_name]
 
     # 7. Evaluate Candidate Gate
     gate_eval = evaluate_candidate_gate(
         candidate_metrics=best_candidate["metrics"],
-        baseline_metrics=BASELINE_CHAMPION_METRICS,
+        baseline_metrics=base_metrics,
         y_pred=best_candidate["y_pred"],
         capacity_limit_kwh=cap_limit,
         required_improvement_pct=5.0,
@@ -392,23 +465,22 @@ def run_training_pipeline(
     # Write evaluation.json
     eval_json_path = rep_dir / "evaluation.json"
     write_evaluation_json(gate_eval, eval_json_path)
-    # Also write to root evaluation.json as requested
     write_evaluation_json(gate_eval, Path("evaluation.json"))
     print(f"\nCandidate Gate Status: {'ELIGIBLE' if gate_eval['eligible'] else 'REJECTED'}")
-    print(f"  Improvement: {gate_eval['achieved_improvement_pct']:.2f}% (Threshold >= 5.0%)")
-    print(f"  Written to {eval_json_path} and ./evaluation.json")
+    impr_pct = gate_eval["achieved_improvement_pct"]
+    print(f"  Improvement over Baseline Champion: {impr_pct:.2f}% (Threshold >= 5.0%)")
 
-    # 8. Train Final Best Model on Full Train/Dev (Daylight Hours)
+    # 8. Train Final Champion Model on complete Train/Dev dataset (VALID daylight hours)
     print(f"\nTraining final {best_candidate_name} on complete Train/Dev dataset...")
     full_day_mask = (
-        (dev_full["quality_flag"] == "VALID")
-        & (dev_full["solar_elevation_target_deg"] > 0)
+        (selected_dev_df["quality_flag"] == "VALID")
+        & (selected_dev_df["solar_elevation_target_deg"] > 0)
     )
-    if "SUSPECT_ZERO" in dev_full["quality_flag"].values:
-        full_day_mask = full_day_mask & (dev_full["quality_flag"] != "SUSPECT_ZERO")
+    if "SUSPECT_ZERO" in selected_dev_df["quality_flag"].values:
+        full_day_mask = full_day_mask & (selected_dev_df["quality_flag"] != "SUSPECT_ZERO")
 
-    X_full_train = dev_full.loc[full_day_mask, feature_cols].values
-    y_full_train = dev_full.loc[full_day_mask, "target_kwh"].values
+    X_full_train = selected_dev_df.loc[full_day_mask, selected_cols].values
+    y_full_train = selected_dev_df.loc[full_day_mask, "target_kwh"].values
 
     final_model = best_candidate["factory"]()
     final_model.fit(X_full_train, y_full_train)
@@ -426,17 +498,19 @@ def run_training_pipeline(
     # 10. Save Model Bundle
     bundle = ModelBundle(
         estimator=final_model,
-        feature_names=feature_cols,
+        feature_names=selected_cols,
         training_window={
             "start_utc": str(t_dev_start),
             "end_utc": str(t_dev_end),
             "training_samples": str(len(y_full_train)),
         },
         data_hashes=data_hashes,
-        mlflow_run_id=None,  # updated after logging
+        mlflow_run_id=None,
         capacity_limit_kwh=cap_limit,
         model_name="solarcast-f1",
         feature_schema_version=feature_schema_version,
+        feature_set=selected_feature_set,
+        needs_weather=(selected_feature_set == "B"),
     )
     bundle_path = mod_dir / "solarcast_f1_bundle.joblib"
     save_bundle(bundle, bundle_path)
@@ -453,17 +527,20 @@ def run_training_pipeline(
     status_tag = "candidate" if gate_eval["eligible"] else "rejected"
 
     for name, rec in benchmark_records.items():
-        run_name = f"{name}_SetA_15mDelay"
+        if rec.get("feature_set") == "Baseline":
+            continue
+        run_name = f"{name}_15mDelay"
         with mlflow.start_run(run_name=run_name) as run:
             run_id = run.info.run_id
             improvement = float(
-                (BASELINE_CHAMPION_METRICS["daylight_mae_kwh"] - rec["metrics"]["daylight_mae_kwh"])
-                / BASELINE_CHAMPION_METRICS["daylight_mae_kwh"] * 100.0
+                (base_metrics["daylight_mae_kwh"] - rec["metrics"]["daylight_mae_kwh"])
+                / base_metrics["daylight_mae_kwh"]
+                * 100.0
             )
             mlflow.log_params({
                 "model_type": rec["type"],
-                "feature_set": "A",
-                "feature_count": len(feature_cols),
+                "feature_set": rec["feature_set"],
+                "feature_count": len(rec["cols"]),
                 "random_seed": seed,
                 "delay_minutes": delay_min,
                 **rec["params"],
@@ -477,6 +554,7 @@ def run_training_pipeline(
                 "git_commit": git_commit,
                 "data_hash_hourly": data_hashes["hourly_parquet"],
                 "data_hash_qh": data_hashes["quarter_hourly_parquet"],
+                "data_hash_hrrr": data_hashes["hrrr_forecast_features_parquet"],
                 "feature_schema_version": feature_schema_version,
                 "status": status_tag if name == best_candidate_name else "rejected",
                 "is_best_candidate": str(name == best_candidate_name),
@@ -485,14 +563,13 @@ def run_training_pipeline(
             # If best candidate, log plots, evaluation.json, and bundle
             if name == best_candidate_name:
                 bundle.mlflow_run_id = run_id
-                save_bundle(bundle, bundle_path)  # re-save with run_id
+                save_bundle(bundle, bundle_path)
 
                 for _p_name, p_file in plots.items():
                     mlflow.log_artifact(str(p_file), artifact_path="plots")
                 mlflow.log_artifact(str(eval_json_path), artifact_path="evaluation")
                 mlflow.log_artifact(str(bundle_path), artifact_path="bundle")
 
-                # Attempt model registration
                 try:
                     mlflow.sklearn.log_model(
                         final_model,
@@ -500,10 +577,11 @@ def run_training_pipeline(
                         registered_model_name="solarcast-f1",
                     )
                 except Exception as reg_err:
-                    print(f"MLflow model registration notice (local file store): {reg_err}")
+                    print(f"MLflow model registration notice: {reg_err}")
 
     return {
         "best_candidate_name": best_candidate_name,
+        "selected_feature_set": selected_feature_set,
         "best_candidate_metrics": best_candidate["metrics"],
         "gate_evaluation": gate_eval,
         "benchmark_records": benchmark_records,
@@ -521,6 +599,7 @@ def main() -> int:
     parser.add_argument("--params-config", default=str(DEFAULT_PARAMS_CONFIG))
     parser.add_argument("--hourly", default=str(DEFAULT_HOURLY_PATH))
     parser.add_argument("--quarter-hourly", default=str(DEFAULT_QH_PATH))
+    parser.add_argument("--weather", default=str(DEFAULT_WEATHER_PATH))
     parser.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
     parser.add_argument("--models-dir", default=str(DEFAULT_MODELS_DIR))
     args = parser.parse_args()
@@ -530,6 +609,7 @@ def main() -> int:
         params_config_path=args.params_config,
         hourly_path=args.hourly,
         quarter_hourly_path=args.quarter_hourly,
+        weather_path=args.weather,
         reports_dir=args.reports_dir,
         models_dir=args.models_dir,
     )

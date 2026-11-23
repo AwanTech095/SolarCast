@@ -2,7 +2,7 @@
 
 ## 1. Model Details
 - **Model Name**: `solarcast-f1`
-- **Version**: `1.0.0`
+- **Version**: `1.1.0` (Feature Set B with NOAA HRRR NWP Weather)
 - **Model Type**: Gradient Boosted Decision Trees (`HistGradientBoostingRegressor` from `scikit-learn`)
 - **Developer**: SolarCast MLOps Team — Member 1 (Data, Features, Models)
 - **Release Date**: November 23, 2026
@@ -13,8 +13,8 @@
 
 ## 2. Intended Use & Scope
 - **Primary Task**: Next-hour solar AC active energy forecast in kilowatt-hours (kWh) over the interval $[H, H+1\text{h})$ UTC.
-- **Plant / Site**: PVDAQ Site 2107 (Denver, Colorado, USA; Nameplate DC Capacity: 893 kW).
-- **Forecast Issue Timing**: Issued at hour $H$ UTC with an operational telemetry cutoff of $H - 15\text{ minutes}$ UTC.
+- **Plant / Site**: PVDAQ Site 2107 (Farm Solar Array, Arbuckle, CA; Nameplate DC Capacity: 893 kW, Nominal AC: 662.4 kW).
+- **Forecast Issue Timing**: Issued at hour $H$ UTC with an operational plant telemetry cutoff of $H - 15\text{ minutes}$ UTC and weather availability constraint of $\text{available\_at\_utc} \le H$ UTC (2-hour nominal latency).
 - **Out of Scope**:
   - Intra-hour (e.g., 5-minute or 15-minute) dispatch forecasting.
   - Multi-day or day-ahead forecasting.
@@ -25,7 +25,7 @@
 
 ## 3. Factors & Input Features
 
-The model uses **Feature Set A** (23 features), defined in `configs/feature_schema.json`:
+The model uses **Feature Set B** (29 features), defined in `configs/feature_schema.json` (Schema Version `1.1.0`):
 1. **Recent Production Lags (15-min intervals)**:
    - `power_kw_lag_0m`: Power during $[H-30\text{m}, H-15\text{m})$
    - `power_kw_lag_15m`: Power during $[H-45\text{m}, H-30\text{m})$
@@ -50,16 +50,26 @@ The model uses **Feature Set A** (23 features), defined in `configs/feature_sche
    - `production_age_minutes`: Latency of plant data (nominally 15 min)
    - `power_kw_missing_count`: Count of missing readings in last 4 intervals (0 to 4)
    - `latest_hour_missing`, `prev_day_missing`, `prev_week_missing`: Binary availability flags
+6. **NOAA HRRR Forecast Weather & Cloud Adjustment Features**:
+   - `tmp_c`: 2-meter air temperature forecast ($^\circ\text{C}$) averaged over leads F1 and F2
+   - `tcdc_pct`: Total cloud cover forecast (%) averaged over leads F1 and F2
+   - `clearsky_ghi_cloud_adj_wm2`: Kasten-Czeplak cloud-scaled clear-sky GHI ($\text{GHI} \times (1 - 0.75 \times (\text{TCDC}/100)^{3.4})$)
+   - `weather_run_age_hours`: Age of initialization run (nominal 2.0 h, higher if fallback)
+   - `weather_fallback_used`: Flag (1 if fallback run $>2\text{h}$ old used, 0 otherwise)
+   - `weather_missing`: Flag (1 if forecast weather is missing or out-of-bounds, 0 otherwise)
 
 ---
 
 ## 4. Training Data & Preprocessing
 
-- **Data Source**: PVDAQ Site 2107 validated inverter telemetry (`data/processed/hourly.parquet` and `quarter_hourly.parquet`).
+- **Data Sources**:
+  - Inverter telemetry: PVDAQ Site 2107 (`data/processed/hourly.parquet` and `quarter_hourly.parquet`).
+  - Forecast weather: NOAA HRRR MesoWest Zarr archive (`data/processed/hrrr_forecast_features.parquet`).
 - **Development Partition (80%)**: 37,090 hours (2018-07-12 00:00 UTC to 2022-10-17 00:00 UTC).
 - **Training Samples**: 18,603 daylight hours (`solar_elevation_target_deg > 0`, `quality_flag == "VALID"`, not `SUSPECT_ZERO`).
 - **Locked Test Set (20%)**: 9,273 hours (2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) strictly unopened.
 - **Handling of Missing Values**: Built-in native histogram binning support in `HistGradientBoostingRegressor` (NaNs treated as missing values, avoiding imputation distortion).
+- **Value Range Sanitization**: Any out-of-range weather values (TCDC outside $[0, 100]\%$, TMP outside $[-40, 60]^\circ\text{C}$, such as upstream fill value $-10000$ in July 2020) are sanitized to `NaN` with `weather_missing = 1`.
 - **Physical Bounding**:
   - Target hours with solar elevation $\le 0^\circ$ are deterministically set to $0.0\text{ kWh}$.
   - Predictions during daylight are strictly clipped to $[0.0, 893.0\text{ kWh}]$.
@@ -68,20 +78,21 @@ The model uses **Feature Set A** (23 features), defined in `configs/feature_sche
 
 ## 5. Evaluation & Performance Metrics
 
-Evaluation on the 3-fold chronological cross-validation partition (13,873 daylight validation hours):
+Evaluation on identical 3-fold chronological cross-validation partition with weather available ($N = 13,374$ daylight hours):
 
-| Metric | Candidate (`solarcast-f1`) | Champion Baseline (`Clear-Sky Scaled 15-Min Persistence`) | Hourly Baseline (`Clear-Sky Persistence`) | Improvement vs Champion Baseline |
-|---|---|---|---|---|
-| **Daylight MAE** | **32.24 kWh** | 42.18 kWh | 75.62 kWh | **+23.56%** |
-| **Daylight RMSE** | **54.76 kWh** | 67.61 kWh | 113.80 kWh | **+19.01%** |
-| **Capacity-Normalized Daylight MAE** | **3.61%** | 4.72% | 8.47% | **-1.11 pp** |
-| **All-Hour MAE** | **16.18 kWh** | 21.15 kWh | 37.87 kWh | **+23.50%** |
-| **All-Hour RMSE** | **38.73 kWh** | 47.81 kWh | 80.53 kWh | **+18.99%** |
+| Metric | Selected Champion (`solarcast-f1` Set B) | Candidate Set A (No Weather) | Champion Baseline (`Clear-Sky Scaled 15-Min Persistence`) | Improvement vs Baseline Champion | Improvement vs Set A |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Daylight MAE** | **31.43 kWh** | 32.24 kWh | 42.09 kWh | **+25.33%** | **+2.52%** |
+| **Daylight RMSE** | **53.35 kWh** | 54.88 kWh | 67.52 kWh | **+21.00%** | **+2.79%** |
+| **Capacity-Normalized Daylight MAE** | **3.52%** | 3.61% | 4.71% | **-1.19 pp** | **-0.09 pp** |
+| **All-Hour MAE** | **15.83 kWh** | 16.18 kWh | 21.15 kWh | **+25.17%** | **+2.20%** |
+| **All-Hour RMSE** | **37.75 kWh** | 38.73 kWh | 47.83 kWh | **+21.07%** | **+2.53%** |
 
 ### Acceptance Gate Status:
-- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (23.56% vs 42.18 kWh champion baseline; threshold $\le 40.07$ kWh)
-- Capacity-Normalized Daylight MAE $\le 20.0\%$: **PASSED** (3.61%)
+- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (25.33% vs 42.09 kWh champion baseline; threshold $\le 39.98$ kWh)
+- Capacity-Normalized Daylight MAE $\le 20.0\%$: **PASSED** (3.52%)
 - Non-negative, finite, bounded outputs: **PASSED** (0 violations)
+- Final Test Locked: **PASSED** (`final_test_opened: false`)
 - Gate Decision: **ELIGIBLE** (recorded in `reports/evaluation.json` and `./evaluation.json`).
 
 ---
@@ -91,16 +102,22 @@ Evaluation on the 3-fold chronological cross-validation partition (13,873 daylig
 - **Diurnal Profile**:
   - Night hours: Zero error (identically 0 kWh).
   - Morning / Evening low sun: Low MAE (< 15 kWh).
-  - Midday solar noon: Highest absolute MAE (~50–65 kWh) due to rapid cloud passing and convective buildup.
+  - Midday solar noon: Peak MAE (~50–65 kWh) due to rapid cloud passing and convective buildup.
 - **Seasonal Profile**:
-  - Summer (Jun–Aug): High stability, Daylight MAE ~12–20 kWh (1.3%–2.2% capacity).
-  - Winter (Dec–Feb): Daylight MAE ~40–60 kWh (4.5%–6.7% capacity) driven by frontal cloud systems.
+  - Summer (Jun–Aug): High stability, Daylight MAE ~11–20 kWh (1.2%–2.2% capacity).
+  - Winter (Dec–Feb): Daylight MAE ~38–57 kWh (4.3%–6.4% capacity) driven by frontal storm events. Weather features deliver strong winter gains (e.g. +11.4% in Dec 2021).
 
 ---
 
 ## 7. Limitations & Caveats
 
-1. **Single Site Calibration**: Trained exclusively on PVDAQ Site 2107 in Denver, CO. Direct transfer to coastal, tropical, or high-humidity climates requires recalibration.
-2. **Missing Weather Forecasts**: Feature Set A relies on production lags and clear-sky models without numerical weather predictions (NWP). Integrating HRRR forecast cloud cover (TCDC/LCDC/MCDC/HCDC) and 2m temperature will address cloud passage dynamics.
-3. **Data Quality Dependency**: Degradation occurs if telemetry exceeds the 15-minute cutoff or if prolonged inverter outages occur (indicated by `power_kw_missing_count > 0` and missingness flags). Evaluation results depend directly on the assumed operational meter availability delay: under zero delay (0 min), 15-minute delay (default operational assumption), and 60-minute delay, the champion baseline achieves Daylight MAEs of 33.09 kWh (3.71% capacity), 42.18 kWh (4.72% capacity), and 67.50 kWh (7.56% capacity), respectively.
-4. **Final Test Partition Reserve**: The reported metrics are out-of-fold cross-validation estimates. Final test set metrics remain sealed until final team sign-off.
+1. **Mixed Cloud Cover Degradation (-9.70%)**:
+   - In broken, mixed-cloud conditions (20% to 80% forecast cloud cover, 12.4% of daylight hours), Feature Set B is **9.70% worse** than Feature Set A (54.26 kWh vs 49.46 kWh Daylight MAE).
+   - This degradation stems from NWP spatial/temporal phase timing errors: 3-km grid numerical weather forecasts frequently miss the exact timing of cumulus cloud transit over a compact PV site. Set A's recent 15-minute telemetry directly senses the real surface shadow, making telemetry more reliable than NWP in broken cloud fields.
+2. **Operational Latency & Missing Weather**:
+   - The model relies on NOAA HRRR forecasts available with a 2-hour operational latency ($\text{init} \le H - 2\text{h}$).
+   - Missing runs occur in 4.09% of daylight hours in the public archive. When weather is unobtainable, the model falls back to native NaN routing with a minor 0.1 kWh error increase.
+3. **Single Site Calibration**:
+   - Trained exclusively on PVDAQ Site 2107 in Arbuckle, CA (Sacramento Valley). Direct transfer to coastal marine layer or high-elevation microclimates requires site-specific recalibration.
+4. **Final Test Partition Reserve**:
+   - All metrics reported in this document are strictly out-of-fold cross-validation estimates on the 80% Train/Dev partition. The 20% final test set remains locked until final evaluation.
