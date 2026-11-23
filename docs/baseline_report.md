@@ -110,3 +110,33 @@ In Task M1.4, candidate machine learning models (Ridge Regression, HistGradientB
 - **Target Threshold for Candidate Gate:** Model must achieve **$\ge 5\%$ improvement** over the champion baseline on validation daylight MAE:
   $$\text{Target Daylight MAE} \le 40.07 \text{ kWh} \quad (5\% \text{ improvement over } 42.18 \text{ kWh})$$ 
 - **Capacity-Normalized Bound:** Must maintain capacity-normalized daylight MAE $\le 20.0\%$ (baseline is currently at 4.72%).
+
+
+---
+
+## 5. Operational Production Delay Sensitivity (0, 15, and 60 Minutes)
+
+The table below reports Daylight MAE (kWh), Daylight RMSE (kWh), and Capacity-Normalized Daylight MAE (%) across all 5 baselines evaluated on the 3 validation folds under different operational telemetry latencies:
+
+| Baseline Model | Metric | Delay = 0 min | Delay = 15 min (Default) | Delay = 60 min |
+|---|---|---|---|---|
+| **Persistence (Latest Available Hour)** | Daylight MAE | 96.07 kWh | 175.73 kWh | 175.73 kWh |
+| | Daylight RMSE | 120.53 kWh | 216.05 kWh | 216.05 kWh |
+| | Cap-Norm MAE | 10.76% | 19.68% | 19.68% |
+| **Same-Hour Previous Day** | Daylight MAE | 75.54 kWh | 75.65 kWh | 75.65 kWh |
+| | Daylight RMSE | 128.14 kWh | 128.37 kWh | 128.37 kWh |
+| | Cap-Norm MAE | 8.46% | 8.47% | 8.47% |
+| **Clear-Sky Persistence** | Daylight MAE | 42.08 kWh | 75.62 kWh | 75.62 kWh |
+| | Daylight RMSE | 64.81 kWh | 113.80 kWh | 113.80 kWh |
+| | Cap-Norm MAE | 4.71% | 8.47% | 8.47% |
+| **Last 15-Minute Persistence** | Daylight MAE | 65.23 kWh | 88.07 kWh | 149.38 kWh |
+| | Daylight RMSE | 85.16 kWh | 112.82 kWh | 185.97 kWh |
+| | Cap-Norm MAE | 7.31% | 9.86% | 16.73% |
+| **Clear-Sky Scaled 15-Minute Persistence** (Champion) | Daylight MAE | **33.09 kWh** | **42.18 kWh** | **67.50 kWh** |
+| | Daylight RMSE | **54.71 kWh** | **67.61 kWh** | **102.04 kWh** |
+| | Cap-Norm MAE | **3.71%** | **4.72%** | **7.56%** |
+
+### Key Sensitivity Insights
+1. **Clear-Sky Scaled 15-Minute Persistence is dominant at all delays**: By scaling the most recent available 15-minute generation reading by the diurnal astronomical clear-sky trajectory, it achieves the lowest Daylight MAE and RMSE across every delay setting.
+2. **Impact of 15m vs 0m Delay**: With zero latency (delay = 0m), using generation right up to the forecast hour improves Clear-Sky 15m Persistence from 42.18 kWh to 33.09 kWh (a 21.5% error reduction).
+3. **Impact of 60m Delay**: With an aggressive 1-hour acquisition lag, Clear-Sky 15m Persistence rises to 67.50 kWh, but still outperforms hourly Clear-Sky Persistence (75.62 kWh) by 8.12 kWh.
