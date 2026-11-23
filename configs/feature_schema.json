@@ -1,10 +1,337 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "site_id": "2107",
-  "feature_count": 23,
   "target_definition": "Hourly AC active energy in kWh over interval [H, H+1h) UTC",
   "issue_time_convention": "H UTC (prediction issue time)",
   "production_cutoff_convention": "H - 15 minutes UTC",
+  "weather_cutoff_convention": "weather_available_at_utc <= H UTC (nominal 2-hour latency)",
+  "feature_count": 23,
+  "feature_sets": {
+    "A": {
+      "feature_count": 23,
+      "description": "Production history, cyclical time encodings, and pvlib clear-sky features (no external weather forecast)",
+      "features": [
+        {
+          "name": "power_kw_lag_0m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power of the latest interval ending at or before cutoff (interval [H-30m, H-15m))"
+        },
+        {
+          "name": "power_kw_lag_15m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 15 minutes before cutoff (interval [H-45m, H-30m))"
+        },
+        {
+          "name": "power_kw_lag_30m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 30 minutes before cutoff (interval [H-60m, H-45m))"
+        },
+        {
+          "name": "power_kw_lag_45m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 45 minutes before cutoff (interval [H-75m, H-60m))"
+        },
+        {
+          "name": "power_kw_last_4_mean",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "Mean 15-minute active power across the last 4 available intervals preceding cutoff"
+        },
+        {
+          "name": "energy_kwh_latest_avail_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy of the latest fully available hour preceding cutoff (interval [H-2h, H-1h))"
+        },
+        {
+          "name": "energy_kwh_prev_day_same_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy for the same hour on the previous day (interval [H-24h, H-23h))"
+        },
+        {
+          "name": "energy_kwh_prev_week_same_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy for the same hour on the previous week (interval [H-168h, H-167h))"
+        },
+        {
+          "name": "energy_kwh_rolling_mean_6h",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Past-only rolling mean of hourly energy over the previous 6 fully available hours [H-7h, H-1h)"
+        },
+        {
+          "name": "energy_kwh_rolling_mean_24h",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Past-only rolling mean of hourly energy over the previous 24 fully available hours [H-25h, H-1h)"
+        },
+        {
+          "name": "hour_sin",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Sine of target hour H (sin(2 * pi * H / 24))"
+        },
+        {
+          "name": "hour_cos",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Cosine of target hour H (cos(2 * pi * H / 24))"
+        },
+        {
+          "name": "day_of_year_sin",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Sine of day-of-year (sin(2 * pi * DOY / 365.25))"
+        },
+        {
+          "name": "day_of_year_cos",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Cosine of day-of-year (cos(2 * pi * DOY / 365.25))"
+        },
+        {
+          "name": "solar_elevation_target_deg",
+          "dtype": "float64",
+          "units": "degrees",
+          "description": "Solar elevation angle evaluated at midpoint of target hour [H, H+1h) (H + 30m)"
+        },
+        {
+          "name": "clearsky_ghi_target_wm2",
+          "dtype": "float64",
+          "units": "W/m^2",
+          "description": "pvlib clear-sky Global Horizontal Irradiance at midpoint of target hour (H + 30m)"
+        },
+        {
+          "name": "clearsky_energy_target_kwh",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Clear-sky reference expected energy for target hour (clearsky_ghi * P95 ratio)"
+        },
+        {
+          "name": "clearsky_index_latest_avail",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Clear-sky index of the latest fully available hour [H-2h, H-1h) (clipped [0, 2]; default 1.0 at night)"
+        },
+        {
+          "name": "production_age_minutes",
+          "dtype": "float64",
+          "units": "minutes",
+          "description": "Age of the latest available 15-minute production observation at issue time H (nominal 15 min)"
+        },
+        {
+          "name": "power_kw_missing_count",
+          "dtype": "int64",
+          "units": "count",
+          "description": "Count of missing 15-minute readings among the last 4 intervals preceding cutoff (0 to 4)"
+        },
+        {
+          "name": "latest_hour_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if the latest fully available hour [H-2h, H-1h) was missing or invalid; 0 otherwise"
+        },
+        {
+          "name": "prev_day_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if same hour previous day [H-24h, H-23h) was missing or invalid; 0 otherwise"
+        },
+        {
+          "name": "prev_week_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if same hour previous week [H-168h, H-167h) was missing or invalid; 0 otherwise"
+        }
+      ]
+    },
+    "B": {
+      "feature_count": 29,
+      "description": "Feature Set A combined with NOAA HRRR NWP forecast weather (2m temperature, total cloud cover, Kasten-Czeplak cloud-adjusted clear-sky GHI, run age, fallback, missingness)",
+      "features": [
+        {
+          "name": "power_kw_lag_0m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power of the latest interval ending at or before cutoff (interval [H-30m, H-15m))"
+        },
+        {
+          "name": "power_kw_lag_15m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 15 minutes before cutoff (interval [H-45m, H-30m))"
+        },
+        {
+          "name": "power_kw_lag_30m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 30 minutes before cutoff (interval [H-60m, H-45m))"
+        },
+        {
+          "name": "power_kw_lag_45m",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "15-minute average active power 45 minutes before cutoff (interval [H-75m, H-60m))"
+        },
+        {
+          "name": "power_kw_last_4_mean",
+          "dtype": "float64",
+          "units": "kW",
+          "description": "Mean 15-minute active power across the last 4 available intervals preceding cutoff"
+        },
+        {
+          "name": "energy_kwh_latest_avail_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy of the latest fully available hour preceding cutoff (interval [H-2h, H-1h))"
+        },
+        {
+          "name": "energy_kwh_prev_day_same_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy for the same hour on the previous day (interval [H-24h, H-23h))"
+        },
+        {
+          "name": "energy_kwh_prev_week_same_hour",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Total active energy for the same hour on the previous week (interval [H-168h, H-167h))"
+        },
+        {
+          "name": "energy_kwh_rolling_mean_6h",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Past-only rolling mean of hourly energy over the previous 6 fully available hours [H-7h, H-1h)"
+        },
+        {
+          "name": "energy_kwh_rolling_mean_24h",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Past-only rolling mean of hourly energy over the previous 24 fully available hours [H-25h, H-1h)"
+        },
+        {
+          "name": "hour_sin",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Sine of target hour H (sin(2 * pi * H / 24))"
+        },
+        {
+          "name": "hour_cos",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Cosine of target hour H (cos(2 * pi * H / 24))"
+        },
+        {
+          "name": "day_of_year_sin",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Sine of day-of-year (sin(2 * pi * DOY / 365.25))"
+        },
+        {
+          "name": "day_of_year_cos",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Cosine of day-of-year (cos(2 * pi * DOY / 365.25))"
+        },
+        {
+          "name": "solar_elevation_target_deg",
+          "dtype": "float64",
+          "units": "degrees",
+          "description": "Solar elevation angle evaluated at midpoint of target hour [H, H+1h) (H + 30m)"
+        },
+        {
+          "name": "clearsky_ghi_target_wm2",
+          "dtype": "float64",
+          "units": "W/m^2",
+          "description": "pvlib clear-sky Global Horizontal Irradiance at midpoint of target hour (H + 30m)"
+        },
+        {
+          "name": "clearsky_energy_target_kwh",
+          "dtype": "float64",
+          "units": "kWh",
+          "description": "Clear-sky reference expected energy for target hour (clearsky_ghi * P95 ratio)"
+        },
+        {
+          "name": "clearsky_index_latest_avail",
+          "dtype": "float64",
+          "units": "dimensionless",
+          "description": "Clear-sky index of the latest fully available hour [H-2h, H-1h) (clipped [0, 2]; default 1.0 at night)"
+        },
+        {
+          "name": "production_age_minutes",
+          "dtype": "float64",
+          "units": "minutes",
+          "description": "Age of the latest available 15-minute production observation at issue time H (nominal 15 min)"
+        },
+        {
+          "name": "power_kw_missing_count",
+          "dtype": "int64",
+          "units": "count",
+          "description": "Count of missing 15-minute readings among the last 4 intervals preceding cutoff (0 to 4)"
+        },
+        {
+          "name": "latest_hour_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if the latest fully available hour [H-2h, H-1h) was missing or invalid; 0 otherwise"
+        },
+        {
+          "name": "prev_day_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if same hour previous day [H-24h, H-23h) was missing or invalid; 0 otherwise"
+        },
+        {
+          "name": "prev_week_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if same hour previous week [H-168h, H-167h) was missing or invalid; 0 otherwise"
+        },
+        {
+          "name": "tmp_c",
+          "dtype": "float64",
+          "units": "degC",
+          "description": "HRRR NWP 2-meter air temperature forecast averaged over leads F1 and F2 for target hour [H, H+1h)"
+        },
+        {
+          "name": "tcdc_pct",
+          "dtype": "float64",
+          "units": "%",
+          "description": "HRRR NWP total cloud cover forecast percentage averaged over leads F1 and F2 for target hour [H, H+1h)"
+        },
+        {
+          "name": "clearsky_ghi_cloud_adj_wm2",
+          "dtype": "float64",
+          "units": "W/m^2",
+          "description": "Clear-sky GHI adjusted by forecast cloud cover via Kasten-Czeplak parameterization: clearsky_ghi_target_wm2 * (1 - 0.75 * (tcdc_pct/100)^3.4)"
+        },
+        {
+          "name": "weather_run_age_hours",
+          "dtype": "float64",
+          "units": "hours",
+          "description": "Age of the HRRR NWP initialization run relative to issue time H (nominal 2 hours, higher if fallback)"
+        },
+        {
+          "name": "weather_fallback_used",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if fallback to an earlier HRRR run (>2h age) was used; 0 if nominal 2h run used or weather missing"
+        },
+        {
+          "name": "weather_missing",
+          "dtype": "int64",
+          "units": "flag",
+          "description": "Indicator flag: 1 if forecast weather data is missing/unobtainable; 0 if weather data successfully ingested"
+        }
+      ]
+    }
+  },
   "features": [
     {
       "name": "power_kw_lag_0m",
