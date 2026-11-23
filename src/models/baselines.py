@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pvlib
 import yaml
 from sklearn.model_selection import TimeSeriesSplit
 
@@ -141,6 +142,190 @@ class ClearSkyPersistence(BaseBaseline):
         pred = np.where(np.isnan(pred), 0.0, pred)
         pred = np.maximum(0.0, pred)
         pred = np.where(daylight, pred, 0.0)
+        return pred
+
+
+class Last15mPersistence(BaseBaseline):
+    """(d) Last 15-minute persistence baseline model.
+
+    Forecasts predicted hourly kWh = kw_lag0 * 1.0 h.
+    Where kw_lag0 is the active power of the latest available 15-minute interval preceding cutoff.
+
+    Fallbacks:
+    - If kw_lag0 is missing/invalid: try kw_lag15, kw_lag30, kw_lag45.
+    - If all 15m lags missing: fallback to latest available hour (energy_kwh_latest_avail_hour).
+    - If latest hour missing: same hour previous day (energy_kwh_prev_day_same_hour).
+    - If all missing: 0.0 kWh.
+    - Nighttime: strictly 0.0 kWh when solar elevation <= 0.
+    - Physical clipping: [0.0, 893.0] kWh.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("Last 15-Minute Persistence")
+
+    def predict(self, features_df: pd.DataFrame) -> np.ndarray:
+        daylight = (features_df["solar_elevation_target_deg"] > 0.0).values
+        pred = features_df["power_kw_lag_0m"].copy().values * 1.0
+
+        # Cascading fallbacks for missing/NaN data
+        missing = np.isnan(pred)
+        if "power_kw_lag_15m" in features_df.columns:
+            pred = np.where(missing, features_df["power_kw_lag_15m"].values * 1.0, pred)
+            missing = np.isnan(pred)
+        if "power_kw_lag_30m" in features_df.columns:
+            pred = np.where(missing, features_df["power_kw_lag_30m"].values * 1.0, pred)
+            missing = np.isnan(pred)
+        if "power_kw_lag_45m" in features_df.columns:
+            pred = np.where(missing, features_df["power_kw_lag_45m"].values * 1.0, pred)
+            missing = np.isnan(pred)
+        if "energy_kwh_latest_avail_hour" in features_df.columns:
+            pred = np.where(missing, features_df["energy_kwh_latest_avail_hour"].values, pred)
+            missing = np.isnan(pred)
+        if "energy_kwh_prev_day_same_hour" in features_df.columns:
+            pred = np.where(missing, features_df["energy_kwh_prev_day_same_hour"].values, pred)
+            missing = np.isnan(pred)
+
+        # Final fallback
+        pred = np.where(missing, 0.0, pred)
+
+        # Physical constraints: 0.0 at night, clip to [0, 893.0]
+        pred = np.where(daylight, pred, 0.0)
+        pred = np.clip(pred, 0.0, 893.0)
+        return pred
+
+
+class ClearSky15mPersistence(BaseBaseline):
+    """(e) Clear-sky-scaled 15-minute persistence baseline model.
+
+    Forecasts:
+        kt15 = (kw_lag0 * 0.25 kWh) / clearsky_energy_15m
+        prediction = kt15 * clearsky_energy_target_kwh
+
+    where clearsky_energy_15m is the pvlib clear-sky energy of the latest available 15-minute
+    interval preceding cutoff (evaluated at the interval midpoint), computed with the identical
+    pvlib clear-sky model, location parameters, and scaling factor (p95_clearsky_ratio)
+    used for clearsky_energy_target_kwh.
+
+    Fallbacks:
+    - If kw_lag0 is missing: try kw_lag15, kw_lag30, kw_lag45.
+    - If clearsky_energy_15m <= 2.5 kWh (night / dawn during the 15-min interval):
+      fallback to clearsky_index_latest_avail (if valid) else 1.0 (clear-sky assumption).
+    - If clearsky_energy_target_kwh is missing: fallback to kw_lag0 * 1.0 h.
+    - Nighttime: strictly 0.0 kWh when solar elevation <= 0.
+    - Physical clipping: [0.0, 893.0] kWh.
+    """
+
+    def __init__(
+        self,
+        delay_minutes: int | None = None,
+        latitude: float = 38.996306,
+        longitude: float = -122.134111,
+        elevation_m: float = 10.0,
+        p95_ratio: float | None = None,
+    ) -> None:
+        super().__init__("Clear-Sky Scaled 15-Minute Persistence")
+        self.delay_minutes = delay_minutes
+        self.latitude = latitude
+        self.longitude = longitude
+        self.elevation_m = elevation_m
+        self.p95_ratio = p95_ratio
+        self._location = pvlib.location.Location(
+            latitude=latitude, longitude=longitude, altitude=elevation_m
+        )
+
+    def predict(self, features_df: pd.DataFrame) -> np.ndarray:
+        daylight = (features_df["solar_elevation_target_deg"] > 0.0).values
+        kw_lag0 = features_df["power_kw_lag_0m"].copy().values
+
+        # Determine delay
+        if self.delay_minutes is not None:
+            delay_min = self.delay_minutes
+        elif "production_age_minutes" in features_df.columns:
+            val_age = features_df["production_age_minutes"].dropna()
+            delay_min = int(val_age.iloc[0]) if len(val_age) > 0 else 15
+        else:
+            delay_min = 15
+
+        # Determine scaling ratio (matching clearsky_energy_target_kwh)
+        p95 = self.p95_ratio
+        if p95 is None:
+            if (
+                "clearsky_energy_target_kwh" in features_df.columns
+                and "clearsky_ghi_target_wm2" in features_df.columns
+            ):
+                ratio_s = (
+                    features_df["clearsky_energy_target_kwh"]
+                    / features_df["clearsky_ghi_target_wm2"]
+                ).dropna()
+                p95 = float(ratio_s.iloc[0]) if len(ratio_s) > 0 else 1.330944
+            else:
+                p95 = 1.330944
+
+        # Compute midpoint timestamps for the lag0 15-minute interval
+        if "interval_start_utc" in features_df.columns:
+            t_target = pd.DatetimeIndex(
+                pd.to_datetime(features_df["interval_start_utc"], utc=True)
+            )
+        elif isinstance(features_df.index, pd.DatetimeIndex):
+            t_target = features_df.index
+            if t_target.tz is None:
+                t_target = t_target.tz_localize("UTC")
+            else:
+                t_target = t_target.tz_convert("UTC")
+        else:
+            t_target = None
+
+        if t_target is not None:
+            midpoint_lag0 = t_target - pd.Timedelta(minutes=delay_min + 7.5)
+            cs_lag0 = self._location.get_clearsky(midpoint_lag0)
+            cs_ghi_lag0 = cs_lag0["ghi"].values
+            cs_energy_15m = np.maximum(0.0, cs_ghi_lag0 * p95 * 0.25)
+        elif "clearsky_energy_15m" in features_df.columns:
+            cs_energy_15m = features_df["clearsky_energy_15m"].values
+        else:
+            cs_energy_15m = np.zeros_like(kw_lag0, dtype=float)
+
+        # kt15 = (kw_lag0 * 0.25 kWh) / cs_energy_15m
+        valid_kt = (cs_energy_15m > 2.5) & (~np.isnan(kw_lag0))
+        kt15 = np.full_like(kw_lag0, np.nan, dtype=float)
+        np.divide(kw_lag0 * 0.25, cs_energy_15m, out=kt15, where=valid_kt)
+        kt15 = np.clip(kt15, 0.0, 2.0)
+
+        # Fallback 1: if kw_lag0 missing/invalid, try lag15
+        if "power_kw_lag_15m" in features_df.columns and t_target is not None:
+            kw_lag15 = features_df["power_kw_lag_15m"].values
+            midpoint_lag15 = t_target - pd.Timedelta(minutes=delay_min + 22.5)
+            cs_lag15 = self._location.get_clearsky(midpoint_lag15)
+            cs_energy_15m_lag15 = np.maximum(0.0, cs_lag15["ghi"].values * p95 * 0.25)
+            valid_kt15 = (cs_energy_15m_lag15 > 2.5) & (~np.isnan(kw_lag15)) & np.isnan(kt15)
+            np.divide(kw_lag15 * 0.25, cs_energy_15m_lag15, out=kt15, where=valid_kt15)
+            kt15 = np.clip(kt15, 0.0, 2.0)
+
+        # Fallback 2: clearsky_index_latest_avail
+        if "clearsky_index_latest_avail" in features_df.columns:
+            fb_kt = features_df["clearsky_index_latest_avail"].values
+            kt15 = np.where(np.isnan(kt15), fb_kt, kt15)
+
+        # Fallback 3: clear-sky assumption 1.0
+        kt15 = np.where(np.isnan(kt15), 1.0, kt15)
+
+        # Forecast = kt15 * clearsky_energy_target_kwh
+        if "clearsky_energy_target_kwh" in features_df.columns:
+            cs_target = features_df["clearsky_energy_target_kwh"].values
+            pred = kt15 * cs_target
+        else:
+            pred = kw_lag0 * 1.0
+
+        # Fallback if prediction is NaN
+        missing_pred = np.isnan(pred)
+        if np.any(missing_pred):
+            pred = np.where(missing_pred, np.nan_to_num(kw_lag0, nan=0.0), pred)
+
+        # Nighttime forced to 0
+        pred = np.where(daylight, pred, 0.0)
+
+        # Physical clipping [0, 893.0]
+        pred = np.clip(pred, 0.0, 893.0)
         return pred
 
 
@@ -265,6 +450,8 @@ def run_baseline_evaluation(
         LatestHourPersistence(),
         SameHourPreviousDayPersistence(),
         ClearSkyPersistence(),
+        Last15mPersistence(),
+        ClearSky15mPersistence(delay_minutes=delay_minutes),
     ]
 
     # 5. Chronological 3-Fold Cross Validation
@@ -499,6 +686,8 @@ def write_baseline_report(
             f"{avg_rmse:.2f} kWh | {avg_all:.2f} kWh |"
         )
 
+    model_col_headers = " | ".join([f"{m.name} (kWh)" for m in models])
+    model_col_divs = " | ".join(["---"] * len(models))
     lines.extend([
         "",
         "---",
@@ -511,9 +700,8 @@ def write_baseline_report(
         "- Summer months (June–August) exhibit exceptionally low errors for Clear-Sky Persistence "
         "(~30–45 kWh Daylight MAE), reflecting stable sunny skies.",
         "",
-        "| Month | Validation Fold | Hours (Daylight) | Latest Hour Persistence (kWh) | "
-        "Same-Hour Prev Day (kWh) | Clear-Sky Persistence (kWh) |",
-        "|---|---|---|---|---|---|",
+        f"| Month | Validation Fold | Hours (Daylight) | {model_col_headers} |",
+        f"|---|---|---|{model_col_divs}|",
     ])
 
     # Combine monthly tables
@@ -527,13 +715,15 @@ def write_baseline_report(
         ref_row = m_rows[champion_name].iloc[0]
         fold_idx = ref_row["fold"]
         hrs = int(ref_row["daylight_hours"])
-        mae_a = m_rows[models[0].name].iloc[0]["daylight_mae"]
-        mae_b = m_rows[models[1].name].iloc[0]["daylight_mae"]
-        mae_c = m_rows[models[2].name].iloc[0]["daylight_mae"]
-        lines.append(
-            f"| `{month_str}` | Fold {fold_idx} | {hrs} | {mae_a:.2f} | "
-            f"{mae_b:.2f} | **{mae_c:.2f}** |"
-        )
+        vals = []
+        for m in models:
+            v_mae = m_rows[m.name].iloc[0]["daylight_mae"]
+            if m.name == champion_name:
+                vals.append(f"**{v_mae:.2f}**")
+            else:
+                vals.append(f"{v_mae:.2f}")
+        vals_str = " | ".join(vals)
+        lines.append(f"| `{month_str}` | Fold {fold_idx} | {hrs} | {vals_str} |")
 
     lines.extend([
         "",

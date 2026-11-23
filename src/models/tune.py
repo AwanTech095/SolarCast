@@ -33,39 +33,16 @@ CAPACITY_LIMIT_KWH = 893.0
 
 def get_feature_columns_a(schema_path: Path | str = "configs/feature_schema.json") -> list[str]:
     """Return the canonical 23 feature column names for Feature Set A from feature schema."""
-    p = Path(schema_path)
-    if p.exists():
-        import json
+    from src.features.preprocessing import get_feature_names
 
-        with open(p, encoding="utf-8") as f:
-            schema = json.load(f)
-        return [item["name"] for item in schema.get("features", [])]
+    return get_feature_names("A", schema_path)
 
-    return [
-        "power_kw_lag_0m",
-        "power_kw_lag_15m",
-        "power_kw_lag_30m",
-        "power_kw_lag_45m",
-        "power_kw_last_4_mean",
-        "energy_kwh_latest_avail_hour",
-        "energy_kwh_prev_day_same_hour",
-        "energy_kwh_prev_week_same_hour",
-        "energy_kwh_rolling_mean_6h",
-        "energy_kwh_rolling_mean_24h",
-        "hour_sin",
-        "hour_cos",
-        "day_of_year_sin",
-        "day_of_year_cos",
-        "solar_elevation_target_deg",
-        "clearsky_ghi_target_wm2",
-        "clearsky_energy_target_kwh",
-        "clearsky_index_latest_avail",
-        "production_age_minutes",
-        "power_kw_missing_count",
-        "latest_hour_missing",
-        "prev_day_missing",
-        "prev_week_missing",
-    ]
+
+def get_feature_columns_b(schema_path: Path | str = "configs/feature_schema.json") -> list[str]:
+    """Return the canonical 29 feature column names for Feature Set B from feature schema."""
+    from src.features.preprocessing import get_feature_names
+
+    return get_feature_names("B", schema_path)
 
 
 def sample_hyperparameter_configs(
@@ -168,6 +145,8 @@ def tune_models(
     dev_full: pd.DataFrame,
     params_config_path: Path | str = DEFAULT_PARAMS_CONFIG,
     n_splits: int = 3,
+    feature_set: str = "A",
+    feature_cols: list[str] | None = None,
 ) -> dict[str, Any]:
     """Execute random search for Ridge and HistGradientBoostingRegressor."""
     with open(params_config_path, encoding="utf-8") as f:
@@ -175,7 +154,10 @@ def tune_models(
 
     seed = int(cfg.get("random_seed", 42))
     n_iter = int(cfg.get("n_search_iter", 10))
-    feature_cols = get_feature_columns_a()
+    if feature_cols is None:
+        feature_cols = (
+            get_feature_columns_b() if feature_set == "B" else get_feature_columns_a()
+        )
     tscv = TimeSeriesSplit(n_splits=n_splits)
 
     models_cfg = cfg.get("models", {})

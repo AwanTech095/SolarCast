@@ -17,11 +17,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.features.preprocessing import build_features
+from src.features.preprocessing import build_features, get_feature_names
 
 SCHEMA_PATH = Path("configs/feature_schema.json")
 HOURLY_PATH = Path("data/processed/hourly.parquet")
 QH_PATH = Path("data/processed/quarter_hourly.parquet")
+WEATHER_PATH = Path("data/processed/hrrr_forecast_features.parquet")
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +35,14 @@ def hourly_df() -> pd.DataFrame:
 def quarter_hourly_df() -> pd.DataFrame:
     """Load cached quarter-hourly dataset."""
     return pd.read_parquet(QH_PATH)
+
+
+@pytest.fixture(scope="module")
+def weather_df() -> pd.DataFrame:
+    """Load cached HRRR forecast weather dataset if present."""
+    if WEATHER_PATH.exists():
+        return pd.read_parquet(WEATHER_PATH)
+    return pd.DataFrame()
 
 
 @pytest.fixture(scope="module")
@@ -177,3 +186,202 @@ class TestFeatureIntegrityAndLeakage:
         # prev_day_missing is 0 (2017-01-01 09:00:00 is VALID)
         assert feats.iloc[0]["prev_day_missing"] == 0
         assert not np.isnan(feats.iloc[0]["energy_kwh_prev_day_same_hour"])
+
+    def test_set_a_invariance(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+    ) -> None:
+        """Verify calling build_features with feature_set='A' produces default output."""
+        test_times = pd.date_range("2022-06-13 10:00:00", periods=5, freq="h", tz="UTC")
+        default_feats = build_features(
+            test_times, hourly_df=hourly_df, quarter_hourly_df=quarter_hourly_df
+        )
+        set_a_feats = build_features(
+            test_times,
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            feature_set="A",
+        )
+
+        assert len(default_feats.columns) == 23
+        assert len(set_a_feats.columns) == 23
+        pd.testing.assert_frame_equal(default_feats, set_a_feats)
+
+    def test_set_b_schema_conformance(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+        weather_df: pd.DataFrame,
+    ) -> None:
+        """Verify build_features with feature_set='B' produces 29 columns matching schema."""
+        test_times = pd.date_range("2022-06-13 10:00:00", periods=5, freq="h", tz="UTC")
+        b_feats = build_features(
+            test_times,
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=weather_df,
+            feature_set="B",
+        )
+
+        expected_b_cols = get_feature_names("B")
+        assert len(b_feats.columns) == 29
+        assert list(b_feats.columns) == expected_b_cols
+
+        # First 23 columns should match Set A
+        a_cols = get_feature_names("A")
+        assert list(b_feats.columns[:23]) == a_cols
+
+        # Weather columns present
+        weather_cols = [
+            "tmp_c",
+            "tcdc_pct",
+            "clearsky_ghi_cloud_adj_wm2",
+            "weather_run_age_hours",
+            "weather_fallback_used",
+            "weather_missing",
+        ]
+        for col in weather_cols:
+            assert col in b_feats.columns
+
+    def test_weather_perturbation_after_cutoff(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+        weather_df: pd.DataFrame,
+    ) -> None:
+        """Verify that perturbing weather data after cutoff does not affect features.
+
+        For issue time H:
+        - Weather released at or before H is usable.
+        - Weather records with weather_available_at_utc > H are strictly future.
+        - Perturbing future rows must not change unperturbed features.
+        """
+        issue_time = pd.Timestamp("2022-06-13 14:00:00", tz="UTC")
+        base_feats = build_features(
+            [issue_time],
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=weather_df,
+            feature_set="B",
+        )
+
+        # Perturb weather rows for future issue times (> 14:00:00 UTC)
+        perturbed_w = weather_df.copy()
+        if "issue_time_utc" in perturbed_w.columns:
+            future_mask = perturbed_w["issue_time_utc"] > issue_time
+            perturbed_w.loc[future_mask, "tmp_c"] = 999.0
+            perturbed_w.loc[future_mask, "tcdc_pct"] = 999.0
+            perturbed_w.loc[future_mask, "weather_available_at_utc"] = (
+                issue_time + pd.Timedelta(hours=5)
+            )
+
+        perturbed_feats = build_features(
+            [issue_time],
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=perturbed_w,
+            feature_set="B",
+        )
+        pd.testing.assert_frame_equal(base_feats, perturbed_feats)
+
+        # If the weather record for issue_time has weather_available_at_utc > issue_time,
+        # it is rejected (features treat weather as missing)
+        future_avail_w = weather_df.copy()
+        if "issue_time_utc" in future_avail_w.columns:
+            target_mask = future_avail_w["issue_time_utc"] == issue_time
+            future_avail_w.loc[target_mask, "weather_available_at_utc"] = (
+                issue_time + pd.Timedelta(minutes=5)
+            )
+            # Give it bogus numbers that should never appear in output
+            future_avail_w.loc[target_mask, "tmp_c"] = 888.8
+            future_avail_w.loc[target_mask, "tcdc_pct"] = 88.8
+
+        rejected_feats = build_features(
+            [issue_time],
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=future_avail_w,
+            feature_set="B",
+        )
+        assert rejected_feats.iloc[0]["weather_missing"] == 1
+        assert np.isnan(rejected_feats.iloc[0]["tmp_c"])
+        assert np.isnan(rejected_feats.iloc[0]["tcdc_pct"])
+        assert np.isnan(rejected_feats.iloc[0]["clearsky_ghi_cloud_adj_wm2"])
+
+    def test_weather_nan_handling(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+    ) -> None:
+        """Verify graceful feature generation when weather dataframe is empty or NaN."""
+        test_times = pd.date_range("2022-06-13 10:00:00", periods=3, freq="h", tz="UTC")
+
+        # Empty weather DataFrame
+        empty_w = pd.DataFrame()
+        feats_empty = build_features(
+            test_times,
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=empty_w,
+            feature_set="B",
+        )
+        assert len(feats_empty.columns) == 29
+        assert (feats_empty["weather_missing"] == 1).all()
+        assert (feats_empty["weather_fallback_used"] == 0).all()
+        assert feats_empty["tmp_c"].isna().all()
+        assert feats_empty["tcdc_pct"].isna().all()
+        assert feats_empty["clearsky_ghi_cloud_adj_wm2"].isna().all()
+        assert feats_empty["weather_run_age_hours"].isna().all()
+
+        # Non-weather features must still be valid numbers
+        assert not feats_empty["hour_sin"].isna().any()
+        assert not feats_empty["clearsky_energy_target_kwh"].isna().any()
+
+    def test_weather_valid_range_filtering(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+    ) -> None:
+        """Verify out-of-range tcdc_pct and tmp_c are treated as NaN with weather_missing=1."""
+        test_times = pd.date_range("2022-06-13 10:00:00", periods=4, freq="h", tz="UTC")
+
+        custom_w = pd.DataFrame(
+            {
+                "issue_time_utc": test_times,
+                "weather_available_at_utc": test_times,
+                "run_age_hours": [2.0, 2.0, 2.0, 2.0],
+                "fallback_used": [False, False, False, False],
+                "tmp_c": [25.0, -45.0, 65.0, 30.0],
+                "tcdc_pct": [-10000.0, 50.0, 50.0, 120.0],
+            }
+        )
+
+        feats = build_features(
+            test_times,
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=custom_w,
+            feature_set="B",
+        )
+
+        # Row 0: tcdc is -10000 (fill value) -> tcdc_pct NaN, weather_missing=1, tmp_c=25.0
+        assert np.isnan(feats.iloc[0]["tcdc_pct"])
+        assert feats.iloc[0]["tmp_c"] == 25.0
+        assert feats.iloc[0]["weather_missing"] == 1
+        assert np.isnan(feats.iloc[0]["clearsky_ghi_cloud_adj_wm2"])
+
+        # Row 1: tmp is -45 -> tmp_c NaN, weather_missing=1, tcdc_pct=50.0
+        assert np.isnan(feats.iloc[1]["tmp_c"])
+        assert feats.iloc[1]["tcdc_pct"] == 50.0
+        assert feats.iloc[1]["weather_missing"] == 1
+
+        # Row 2: tmp is 65 -> tmp_c NaN, weather_missing=1, tcdc_pct=50.0
+        assert np.isnan(feats.iloc[2]["tmp_c"])
+        assert feats.iloc[2]["tcdc_pct"] == 50.0
+        assert feats.iloc[2]["weather_missing"] == 1
+
+        # Row 3: tcdc is 120 -> tcdc_pct NaN, weather_missing=1, tmp_c=30.0
+        assert np.isnan(feats.iloc[3]["tcdc_pct"])
+        assert feats.iloc[3]["tmp_c"] == 30.0
+        assert feats.iloc[3]["weather_missing"] == 1

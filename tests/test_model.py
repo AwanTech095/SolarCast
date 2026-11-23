@@ -16,6 +16,10 @@ import pandas as pd
 import pytest
 from sklearn.linear_model import Ridge
 
+from src.models.baselines import (
+    ClearSky15mPersistence,
+    Last15mPersistence,
+)
 from src.models.bundle import ModelBundle, load_bundle, save_bundle
 from src.models.evaluate import (
     check_final_test_safeguard,
@@ -244,3 +248,108 @@ def test_model_bundle_roundtrip(synthetic_feature_data, tmp_path):
     np.testing.assert_allclose(preds_original, preds_loaded, rtol=1e-6, atol=1e-6)
     assert loaded_bundle.model_name == "test-ridge"
     assert loaded_bundle.mlflow_run_id == "run_test_456"
+
+
+def test_model_bundle_set_b_with_weather(tmp_path, synthetic_feature_data):
+    """Verify ModelBundle serialization and weather-aware predict() for Set B."""
+    df = synthetic_feature_data.copy().dropna()
+    weather_cols = [
+        "tmp_c",
+        "tcdc_pct",
+        "clearsky_ghi_cloud_adj_wm2",
+        "weather_run_age_hours",
+        "weather_fallback_used",
+        "weather_missing",
+    ]
+    # Add weather columns to df
+    df["tmp_c"] = 25.0
+    df["tcdc_pct"] = 10.0
+    df["clearsky_ghi_cloud_adj_wm2"] = df["clearsky_ghi_target_wm2"] * 0.95
+    df["weather_run_age_hours"] = 2.0
+    df["weather_fallback_used"] = 0
+    df["weather_missing"] = 0
+
+    drop_cols = ["target_kwh", "interval_start_utc", "is_daylight"]
+    all_feature_cols = [c for c in df.columns if c not in drop_cols]
+    assert len(all_feature_cols) == 29
+
+    model = Ridge(alpha=1.0)
+    model.fit(df[all_feature_cols].values, df["target_kwh"].values)
+
+    bundle = ModelBundle(
+        estimator=model,
+        feature_names=all_feature_cols,
+        training_window={"start_utc": "2022-06-01T00:00:00Z", "end_utc": "2022-06-05T00:00:00Z"},
+        data_hashes={"hourly": "hash123", "hrrr": "hash456"},
+        mlflow_run_id="run_b_123",
+        capacity_limit_kwh=893.0,
+        model_name="test-hgb-b",
+        feature_schema_version="1.1.0",
+        feature_set="B",
+        needs_weather=True,
+    )
+    assert bundle.needs_weather is True
+    assert bundle.feature_set == "B"
+
+    # Test predict with features_df containing all features
+    preds_all = bundle.predict(df[all_feature_cols])
+    assert len(preds_all) == len(df)
+
+    # Test predict where weather features are passed separately in weather_df
+    base_features_df = df[[c for c in all_feature_cols if c not in weather_cols]]
+    weather_df = df[weather_cols]
+    preds_merged = bundle.predict(base_features_df, weather_df=weather_df)
+    np.testing.assert_allclose(preds_all, preds_merged, rtol=1e-6, atol=1e-6)
+
+    # Round-trip save and load
+    b_path = tmp_path / "bundle_b.joblib"
+    save_bundle(bundle, b_path)
+    loaded = load_bundle(b_path)
+    assert loaded.feature_set == "B"
+    assert loaded.needs_weather is True
+    assert loaded.feature_schema_version == "1.1.0"
+    preds_loaded = loaded.predict(base_features_df, weather_df=weather_df)
+    np.testing.assert_allclose(preds_all, preds_loaded, rtol=1e-6, atol=1e-6)
+
+
+def test_last_15m_persistence_baseline(synthetic_feature_data):
+    """Verify Last15mPersistence predicts kw_lag0 * 1h with fallbacks and bounds."""
+    df = synthetic_feature_data.copy()
+    model = Last15mPersistence()
+    preds = model.predict(df)
+
+    assert len(preds) == len(df)
+    assert np.all(np.isfinite(preds))
+    assert np.all(preds >= 0.0)
+    assert np.all(preds <= 893.0)
+
+    # Nighttime zero check
+    night_idx = np.where(df["solar_elevation_target_deg"] <= 0)[0]
+    assert np.all(preds[night_idx] == 0.0)
+
+    # Check daytime valid lag0
+    valid_lag0_day = (df["solar_elevation_target_deg"] > 0) & (~df["power_kw_lag_0m"].isna())
+    idx = np.where(valid_lag0_day)[0]
+    np.testing.assert_allclose(preds[idx], np.clip(df["power_kw_lag_0m"].values[idx], 0.0, 893.0))
+
+    # Check fallback when kw_lag0 is NaN
+    nan_idx = np.where((df["solar_elevation_target_deg"] > 0) & (df["power_kw_lag_0m"].isna()))[0]
+    if len(nan_idx) > 0:
+        expected_fb = np.clip(df["power_kw_lag_15m"].values[nan_idx], 0.0, 893.0)
+        np.testing.assert_allclose(preds[nan_idx], expected_fb)
+
+
+def test_clearsky_15m_persistence_baseline(synthetic_feature_data):
+    """Verify ClearSky15mPersistence computes kt15 scaling, enforces bounds and night zero."""
+    df = synthetic_feature_data.copy()
+    model = ClearSky15mPersistence(delay_minutes=15)
+    preds = model.predict(df)
+
+    assert len(preds) == len(df)
+    assert np.all(np.isfinite(preds))
+    assert np.all(preds >= 0.0)
+    assert np.all(preds <= 893.0)
+
+    # Nighttime zero check
+    night_idx = np.where(df["solar_elevation_target_deg"] <= 0)[0]
+    assert np.all(preds[night_idx] == 0.0)
