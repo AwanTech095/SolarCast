@@ -1,0 +1,9 @@
+# Dedicated Feast environment requirements (isolated from .venv due to numpy 2.x dependency in Feast 0.68.0)
+feast==0.68.0
+pandas==2.3.3
+numpy==2.4.6
+pyarrow==26.0.1
+PyYAML==6.0.4
+pytest==9.2.0
+mlflow==3.18.0
+pvlib==0.16.1

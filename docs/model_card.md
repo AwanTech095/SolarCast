@@ -124,14 +124,18 @@ The model uses **Feature Set B** (29 features), defined in `configs/feature_sche
 
 ## 7. Limitations & Caveats
 
-1. **Mixed Cloud Cover Degradation (-9.70%)**:
-   - In broken, mixed-cloud conditions (20% to 80% forecast cloud cover, 12.4% of daylight hours), Feature Set B is **9.70% worse** than Feature Set A (54.26 kWh vs 49.46 kWh Daylight MAE).
-   - This degradation stems from NWP spatial/temporal phase timing errors: 3-km grid numerical weather forecasts frequently miss the exact timing of cumulus cloud transit over a compact PV site. Set A's recent 15-minute telemetry directly senses the real surface shadow, making telemetry more reliable than NWP in broken cloud fields.
+1. **Mixed Cloud Cover Performance (-9.70% on Validation, -3.21% on Final Test)**:
+   - In broken, mixed-cloud conditions (20% to 80% forecast cloud cover, 12.4% of validation daylight hours), Feature Set B is **9.70% worse** than Feature Set A on validation (54.26 kWh vs 49.46 kWh) and **3.21% worse** on test (58.16 vs 56.35 kWh).
+   - *Hypothesis*: timing errors of forecast cloud on broken cloud; not tested. In broken cloud regimes, numerical weather predictions may experience spatial/temporal phase timing errors relative to a compact PV site, whereas recent 15-minute generation telemetry reflects immediate ground conditions.
 2. **Operational Latency & Missing Weather**:
    - The model relies on NOAA HRRR forecasts available with a 2-hour operational latency ($\text{init} \le H - 2\text{h}$).
-   - Missing runs occur in 4.09% of daylight hours in the public archive. When weather is unobtainable, the model falls back to native NaN routing with a minor 0.1 kWh error increase.
+   - Missing runs occur in 4.09% of validation daylight hours in the public archive (cause unknown; observed only as missing files/chunks in the archive). When weather is unobtainable, the model routes missing values via native NaN handling.
 3. **Single Site Calibration**:
    - Trained exclusively on PVDAQ Site 2107 in Arbuckle, CA (Sacramento Valley). Direct transfer to coastal marine layer or high-elevation microclimates requires site-specific recalibration.
 4. **Final Test Safeguard & Reproducibility**:
    - The 20% final test set was opened exactly once on November 23, 2026 under strict audit logging (`reports/final_test_audit.json`).
    - No models were selected or tuned on test results; all estimators were fit strictly on the Train/Dev partition.
+5. **Clear-Sky Scaling Constant (P95 Ratio)**:
+   - The clear-sky scaling constant ($P_{95} = 1.330944\text{ kWh}/(\text{W/m}^2)$) used in `configs/features.yaml` to scale `clearsky_ghi_target_wm2` into `clearsky_energy_target_kwh` may have been computed on the full dataset rather than strictly within training folds.
+   - In the baseline champion (`ClearSky15mPersistence`), the scaling factor $P_{95}$ cancels out algebraically in the ratio $\frac{\text{clearsky\_energy\_target}}{\text{clearsky\_energy\_15}} = \frac{\text{GHI}_{\text{target}} \times P_{95}}{\text{GHI}_{15} \times P_{95}} = \frac{\text{GHI}_{\text{target}}}{\text{GHI}_{15}}$.
+   - In decision tree-based models (`HistGradientBoostingRegressor`), multiplying an input feature by a strictly positive scalar constant ($X \times c$) is a strictly monotonic transformation that preserves value ordering, and thus cannot alter split points, feature importance, or model predictions. It is stated here as a factual property of the preprocessing pipeline.
