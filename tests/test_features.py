@@ -337,3 +337,51 @@ class TestFeatureIntegrityAndLeakage:
         # Non-weather features must still be valid numbers
         assert not feats_empty["hour_sin"].isna().any()
         assert not feats_empty["clearsky_energy_target_kwh"].isna().any()
+
+    def test_weather_valid_range_filtering(
+        self,
+        hourly_df: pd.DataFrame,
+        quarter_hourly_df: pd.DataFrame,
+    ) -> None:
+        """Verify out-of-range tcdc_pct and tmp_c are treated as NaN with weather_missing=1."""
+        test_times = pd.date_range("2022-06-13 10:00:00", periods=4, freq="h", tz="UTC")
+
+        custom_w = pd.DataFrame(
+            {
+                "issue_time_utc": test_times,
+                "weather_available_at_utc": test_times,
+                "run_age_hours": [2.0, 2.0, 2.0, 2.0],
+                "fallback_used": [False, False, False, False],
+                "tmp_c": [25.0, -45.0, 65.0, 30.0],
+                "tcdc_pct": [-10000.0, 50.0, 50.0, 120.0],
+            }
+        )
+
+        feats = build_features(
+            test_times,
+            hourly_df=hourly_df,
+            quarter_hourly_df=quarter_hourly_df,
+            weather_df=custom_w,
+            feature_set="B",
+        )
+
+        # Row 0: tcdc is -10000 (fill value) -> tcdc_pct NaN, weather_missing=1, tmp_c=25.0
+        assert np.isnan(feats.iloc[0]["tcdc_pct"])
+        assert feats.iloc[0]["tmp_c"] == 25.0
+        assert feats.iloc[0]["weather_missing"] == 1
+        assert np.isnan(feats.iloc[0]["clearsky_ghi_cloud_adj_wm2"])
+
+        # Row 1: tmp is -45 -> tmp_c NaN, weather_missing=1, tcdc_pct=50.0
+        assert np.isnan(feats.iloc[1]["tmp_c"])
+        assert feats.iloc[1]["tcdc_pct"] == 50.0
+        assert feats.iloc[1]["weather_missing"] == 1
+
+        # Row 2: tmp is 65 -> tmp_c NaN, weather_missing=1, tcdc_pct=50.0
+        assert np.isnan(feats.iloc[2]["tmp_c"])
+        assert feats.iloc[2]["tcdc_pct"] == 50.0
+        assert feats.iloc[2]["weather_missing"] == 1
+
+        # Row 3: tcdc is 120 -> tcdc_pct NaN, weather_missing=1, tmp_c=30.0
+        assert np.isnan(feats.iloc[3]["tcdc_pct"])
+        assert feats.iloc[3]["tmp_c"] == 30.0
+        assert feats.iloc[3]["weather_missing"] == 1

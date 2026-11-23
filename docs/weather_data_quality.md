@@ -174,3 +174,28 @@ The largest contiguous missing blocks in the daylight series are:
 > The exact root cause for missing runs in the public archive (`s3://hrrrzarr`) is **unknown**. There are no upstream incident logs or error manifests embedded in the Zarr store. Missing runs correspond to either missing model output chunks during the archive ingestion pipeline by the University of Utah / AWS Open Data program, or NOAA operational model outages at the time of run generation.
 
 Because feature extraction gracefully tolerates missing weather (marking `extraction_status = FAILED_NO_RUN` and returning `NaN`), downstream modeling and serving pipelines must explicitly support `NaN` weather inputs (e.g., via median imputation in linear models, native NaN routing in tree ensembles, and the `weather_missing` binary indicator feature).
+
+---
+
+## 6. Value Range Validation and Upstream Fill Value Anomaly
+
+### 6.1 Range Bounds
+Physical and meteorological validation thresholds for HRRR forecast features:
+- **Total Cloud Cover (`tcdc_pct`):** $[0.0, 100.0]\,\%$
+- **2-Meter Air Temperature (`tmp_c`):** $[-40.0, 60.0]\,^\circ\text{C}$
+
+### 6.2 Upstream Fill Value Anomaly (-10,000)
+During data auditing, exactly one record was found with an out-of-range value:
+- **Issue Time:** `2020-07-29 21:00:00+00:00` (target hour `21:00:00` to `22:00:00` UTC)
+- **Extracted Values:** `tmp_c = 34.1` $^\circ\text{C}$, `tcdc_pct = -10000.0` %, `extraction_status = SUCCESS:tmp,tcdc`
+- **Cause:** Upstream missing/fill value sentinel (`-10000`) embedded in the MesoWest HRRR Zarr array for entire atmosphere total cloud cover.
+
+### 6.3 Handling in Feature Engineering Pipeline
+The feature extraction code in `src/features/preprocessing.py` treats any `tcdc_pct` outside $[0, 100]$ or `tmp_c` outside $[-40, 60]$ as `NaN`:
+1. The out-of-bounds `tcdc_pct = -10000.0` is converted to `NaN`.
+2. The binary indicator `weather_missing` is set to `1`.
+3. `clearsky_ghi_cloud_adj_wm2` is set to `NaN` (avoiding false clear-sky scaling from clipping negative values).
+4. `weather_fallback_used` is forced to `0`.
+5. Downstream modeling routes `NaN` via native tree branching (`HistGradientBoostingRegressor`) or median imputation (`Ridge`).
+
+After range filtering, the effective usable weather count across the evaluation period is **22,569 / 23,532 (95.91%)** daylight hours. This behavior is covered by unit test `test_weather_valid_range_filtering` in `tests/test_features.py`.

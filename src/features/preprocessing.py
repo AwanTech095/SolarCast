@@ -372,9 +372,18 @@ def build_features(
             is_avail = valid_avail.values
             tmp_c = np.where(is_avail, raw_tmp, np.nan).astype(float)
             tcdc_pct = np.where(is_avail, raw_tcdc, np.nan).astype(float)
+
+            # Valid range enforcement:
+            # Temperature: -40°C to 60°C; Total Cloud Cover: 0% to 100%
+            # Out-of-range values (e.g., upstream fill value -10000 in July 2020) are treated as NaN
+            invalid_tmp = (tmp_c < -40.0) | (tmp_c > 60.0)
+            invalid_tcdc = (tcdc_pct < 0.0) | (tcdc_pct > 100.0)
+            tmp_c = np.where(invalid_tmp, np.nan, tmp_c)
+            tcdc_pct = np.where(invalid_tcdc, np.nan, tcdc_pct)
+
             weather_run_age_hours = np.where(is_avail, raw_age, np.nan).astype(float)
             weather_fallback_used = np.where(
-                is_avail & (~np.isnan(tmp_c)) & raw_fb, 1, 0
+                is_avail & (~np.isnan(tmp_c)) & (~np.isnan(tcdc_pct)) & raw_fb, 1, 0
             ).astype(int)
 
             # Missing indicator: 1 if temperature or cloud cover is NaN, else 0
