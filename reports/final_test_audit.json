@@ -1,0 +1,14 @@
+{
+  "final_test_opened": true,
+  "opened_at_utc": "2026-11-23T22:26:12.204643+00:00",
+  "reason": "one-time final evaluation after model selection",
+  "git_commit": "763b39104ba9993987590d51e879dc16a011174f",
+  "metadata": {
+    "test_hours_valid": 9273,
+    "excluded_hours": 62,
+    "suspect_zero": 35,
+    "missing_data": 27,
+    "start_utc": "2022-10-17 01:00:00+00:00",
+    "end_utc": "2023-11-09 23:00:00+00:00"
+  }
+}

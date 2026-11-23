@@ -67,7 +67,7 @@ The model uses **Feature Set B** (29 features), defined in `configs/feature_sche
   - Forecast weather: NOAA HRRR MesoWest Zarr archive (`data/processed/hrrr_forecast_features.parquet`).
 - **Development Partition (80%)**: 37,090 hours (2018-07-12 00:00 UTC to 2022-10-17 00:00 UTC).
 - **Training Samples**: 18,603 daylight hours (`solar_elevation_target_deg > 0`, `quality_flag == "VALID"`, not `SUSPECT_ZERO`).
-- **Locked Test Set (20%)**: 9,273 hours (2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) strictly unopened.
+- **Final Test Set (20%)**: 9,273 valid hours (2022-10-17 01:00 UTC to 2023-11-09 23:00 UTC) opened once on 2026-11-23 under strict audit logging for one-time evaluation (see [docs/final_test_report.md](file:///c:/projects/SolarCast/docs/final_test_report.md)).
 - **Handling of Missing Values**: Built-in native histogram binning support in `HistGradientBoostingRegressor` (NaNs treated as missing values, avoiding imputation distortion).
 - **Value Range Sanitization**: Any out-of-range weather values (TCDC outside $[0, 100]\%$, TMP outside $[-40, 60]^\circ\text{C}$, such as upstream fill value $-10000$ in July 2020) are sanitized to `NaN` with `weather_missing = 1`.
 - **Physical Bounding**:
@@ -78,7 +78,7 @@ The model uses **Feature Set B** (29 features), defined in `configs/feature_sche
 
 ## 5. Evaluation & Performance Metrics
 
-Evaluation on identical 3-fold chronological cross-validation partition with weather available ($N = 13,374$ daylight hours):
+### 5.1 Out-of-Fold Cross-Validation on Train/Dev (3 Folds, N = 13,374 Daylight Hours with Weather)
 
 | Metric | Selected Champion (`solarcast-f1` Set B) | Candidate Set A (No Weather) | Champion Baseline (`Clear-Sky Scaled 15-Min Persistence`) | Improvement vs Baseline Champion | Improvement vs Set A |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -88,11 +88,24 @@ Evaluation on identical 3-fold chronological cross-validation partition with wea
 | **All-Hour MAE** | **15.83 kWh** | 16.18 kWh | 21.15 kWh | **+25.17%** | **+2.20%** |
 | **All-Hour RMSE** | **37.75 kWh** | 38.73 kWh | 47.83 kWh | **+21.07%** | **+2.53%** |
 
+### 5.2 One-Time Final Test Evaluation (Latest 20% Held-Out Time, N = 4,387 Primary Daylight Hours)
+
+| Metric | Selected Champion (`solarcast-f1` Set B) | Candidate Set A (No Weather) | Champion Baseline (`Clear-Sky Scaled 15-Min Persistence`) | Improvement vs Baseline Champion | Improvement vs Set A |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Daylight MAE** | **32.69 kWh** | 33.99 kWh | 43.48 kWh | **+24.83%** | **+3.84%** |
+| **Daylight RMSE** | **56.85 kWh** | 58.92 kWh | 72.28 kWh | **+21.36%** | **+3.51%** |
+| **Capacity-Normalized Daylight MAE** | **3.66%** | 3.81% | 4.87% | **-1.21 pp** | **-0.15 pp** |
+| **All-Hour MAE** | **16.67 kWh** | 17.27 kWh | 22.01 kWh | **+24.25%** | **+3.45%** |
+| **All-Hour RMSE** | **40.87 kWh** | 42.26 kWh | 51.83 kWh | **+21.14%** | **+3.28%** |
+
+- **All Daylight Hours ($N = 4,601$, including 214 missing-weather hours)**: Daylight MAE **33.48 kWh** (3.75% capacity), outperforming baseline champion by **+24.33%** and Set A by **+3.46%**.
+- **Generalization Gap**: $\Delta\text{MAE} = +1.26\text{ kWh}$ ($+4.01\%$) between validation CV (31.43 kWh) and final test (32.69 kWh), demonstrating minimal overfitting.
+
 ### Acceptance Gate Status:
-- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (25.33% vs 42.09 kWh champion baseline; threshold $\le 39.98$ kWh)
-- Capacity-Normalized Daylight MAE $\le 20.0\%$: **PASSED** (3.52%)
+- $\ge 5.0\%$ Daylight MAE Improvement: **PASSED** (24.83% on final test, 25.33% on validation CV vs champion baseline)
+- Capacity-Normalized Daylight MAE $\le 20.0\%$: **PASSED** (3.66% on final test, 3.52% on validation CV)
 - Non-negative, finite, bounded outputs: **PASSED** (0 violations)
-- Final Test Locked: **PASSED** (`final_test_opened: false`)
+- Final Test Safeguard: **PASSED** (`final_test_opened: true`, audited once on 2026-11-23 in `reports/final_test_audit.json`)
 - Gate Decision: **ELIGIBLE** (recorded in `reports/evaluation.json` and `./evaluation.json`).
 
 ---
@@ -119,5 +132,6 @@ Evaluation on identical 3-fold chronological cross-validation partition with wea
    - Missing runs occur in 4.09% of daylight hours in the public archive. When weather is unobtainable, the model falls back to native NaN routing with a minor 0.1 kWh error increase.
 3. **Single Site Calibration**:
    - Trained exclusively on PVDAQ Site 2107 in Arbuckle, CA (Sacramento Valley). Direct transfer to coastal marine layer or high-elevation microclimates requires site-specific recalibration.
-4. **Final Test Partition Reserve**:
-   - All metrics reported in this document are strictly out-of-fold cross-validation estimates on the 80% Train/Dev partition. The 20% final test set remains locked until final evaluation.
+4. **Final Test Safeguard & Reproducibility**:
+   - The 20% final test set was opened exactly once on November 23, 2026 under strict audit logging (`reports/final_test_audit.json`).
+   - No models were selected or tuned on test results; all estimators were fit strictly on the Train/Dev partition.
