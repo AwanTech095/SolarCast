@@ -10,8 +10,11 @@ __pycache__/
 
 # Python environments and generated caches
 .venv/
+.venv-feast/
 venv/
 env/
+feature_store/feature_repo/data/
+*.db
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
