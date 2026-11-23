@@ -1,0 +1,398 @@
+{
+  "mode": "final_test",
+  "partition_name": "final_test_partition",
+  "evaluation_timestamp_utc": "2026-11-23T22:26:18.405825+00:00",
+  "git_commit": "763b39104ba9993987590d51e879dc16a011174f",
+  "reason": "one-time final evaluation after model selection",
+  "sample_counts": {
+    "total_hours": 9273,
+    "all_daylight_hours": 4601,
+    "primary_daylight_hours": 4387,
+    "weather_missing_daylight_hours": 214,
+    "excluded_test_window_hours": 62,
+    "suspect_zero_test_hours": 35,
+    "missing_data_test_hours": 27,
+    "august_2023_outage_daylight_hours": 101
+  },
+  "primary_results": {
+    "Latest_Hour_Persistence": {
+      "daylight_mae_kwh": 174.7120196856622,
+      "daylight_rmse_kwh": 215.76548332857118,
+      "capacity_norm_daylight_mae": 0.19564615866255566,
+      "all_hour_mae_kwh": 87.09594495438368,
+      "all_hour_rmse_kwh": 152.42610683156335
+    },
+    "Same_Hour_Previous_Day": {
+      "daylight_mae_kwh": 83.23901855778436,
+      "daylight_rmse_kwh": 144.52482780284507,
+      "capacity_norm_daylight_mae": 0.09321278673884027,
+      "all_hour_mae_kwh": 41.50037330054998,
+      "all_hour_rmse_kwh": 101.99407886472419
+    },
+    "Clear_Sky_Persistence_Hourly": {
+      "daylight_mae_kwh": 72.51683342713972,
+      "daylight_rmse_kwh": 110.34251673422828,
+      "capacity_norm_daylight_mae": 0.08120586050071636,
+      "all_hour_mae_kwh": 36.344260740551086,
+      "all_hour_rmse_kwh": 78.24769915829445
+    },
+    "Last_15m_Persistence": {
+      "daylight_mae_kwh": 90.80075020150446,
+      "daylight_rmse_kwh": 116.42595382224734,
+      "capacity_norm_daylight_mae": 0.10168057133427151,
+      "all_hour_mae_kwh": 45.492923361803086,
+      "all_hour_rmse_kwh": 82.75550087872739
+    },
+    "Clear_Sky_Scaled_15m_Persistence": {
+      "daylight_mae_kwh": 43.48245817421121,
+      "daylight_rmse_kwh": 72.28455523679176,
+      "capacity_norm_daylight_mae": 0.048692562345141334,
+      "all_hour_mae_kwh": 22.013286122196146,
+      "all_hour_rmse_kwh": 51.82933242689145
+    },
+    "Ridge_Set_A": {
+      "daylight_mae_kwh": 47.006731252819755,
+      "daylight_rmse_kwh": 70.00461377748168,
+      "capacity_norm_daylight_mae": 0.052639116744479006,
+      "all_hour_mae_kwh": 23.691775339744034,
+      "all_hour_rmse_kwh": 50.0327169912282
+    },
+    "Ridge_Set_B": {
+      "daylight_mae_kwh": 45.29460805335521,
+      "daylight_rmse_kwh": 66.9250959500379,
+      "capacity_norm_daylight_mae": 0.050721845524473924,
+      "all_hour_mae_kwh": 22.984244699400065,
+      "all_hour_rmse_kwh": 48.03160664866709
+    },
+    "HistGradientBoosting_Set_A": {
+      "daylight_mae_kwh": 33.991758580671004,
+      "daylight_rmse_kwh": 58.91544654059782,
+      "capacity_norm_daylight_mae": 0.038064679261669655,
+      "all_hour_mae_kwh": 17.269151541141778,
+      "all_hour_rmse_kwh": 42.26252469628942
+    },
+    "HistGradientBoosting_Set_B": {
+      "daylight_mae_kwh": 32.686251452690804,
+      "daylight_rmse_kwh": 56.84834793308281,
+      "capacity_norm_daylight_mae": 0.036602745187783656,
+      "all_hour_mae_kwh": 16.674136731363337,
+      "all_hour_rmse_kwh": 40.87437548833243
+    }
+  },
+  "all_daylight_results": {
+    "Latest_Hour_Persistence": {
+      "daylight_mae_kwh": 175.40650083938274,
+      "daylight_rmse_kwh": 216.39160549888564,
+      "capacity_norm_daylight_mae": 0.19642385312360888,
+      "all_hour_mae_kwh": 87.09594495438368,
+      "all_hour_rmse_kwh": 152.42610683156335
+    },
+    "Same_Hour_Previous_Day": {
+      "daylight_mae_kwh": 83.51175275287981,
+      "daylight_rmse_kwh": 144.79459789916402,
+      "capacity_norm_daylight_mae": 0.093518200171198,
+      "all_hour_mae_kwh": 41.50037330054998,
+      "all_hour_rmse_kwh": 101.99407886472419
+    },
+    "Clear_Sky_Persistence_Hourly": {
+      "daylight_mae_kwh": 73.11996145340801,
+      "daylight_rmse_kwh": 111.08216906939631,
+      "capacity_norm_daylight_mae": 0.08188125582688467,
+      "all_hour_mae_kwh": 36.344260740551086,
+      "all_hour_rmse_kwh": 78.24769915829445
+    },
+    "Last_15m_Persistence": {
+      "daylight_mae_kwh": 91.55846362399478,
+      "daylight_rmse_kwh": 117.48186653530067,
+      "capacity_norm_daylight_mae": 0.10252907460693704,
+      "all_hour_mae_kwh": 45.492923361803086,
+      "all_hour_rmse_kwh": 82.75550087872739
+    },
+    "Clear_Sky_Scaled_15m_Persistence": {
+      "daylight_mae_kwh": 44.23686481441531,
+      "daylight_rmse_kwh": 73.57563406450306,
+      "capacity_norm_daylight_mae": 0.04953736261412689,
+      "all_hour_mae_kwh": 22.013286122196146,
+      "all_hour_rmse_kwh": 51.82933242689145
+    },
+    "Ridge_Set_A": {
+      "daylight_mae_kwh": 47.619744734937285,
+      "daylight_rmse_kwh": 71.02489710762448,
+      "capacity_norm_daylight_mae": 0.05332558201000816,
+      "all_hour_mae_kwh": 23.691775339744034,
+      "all_hour_rmse_kwh": 50.0327169912282
+    },
+    "Ridge_Set_B": {
+      "daylight_mae_kwh": 46.19376524615014,
+      "daylight_rmse_kwh": 68.1838156695862,
+      "capacity_norm_daylight_mae": 0.05172874047721181,
+      "all_hour_mae_kwh": 22.984244699400065,
+      "all_hour_rmse_kwh": 48.03160664866709
+    },
+    "HistGradientBoosting_Set_A": {
+      "daylight_mae_kwh": 34.675386881331825,
+      "daylight_rmse_kwh": 59.9930477768118,
+      "capacity_norm_daylight_mae": 0.038830220471816154,
+      "all_hour_mae_kwh": 17.269151541141778,
+      "all_hour_rmse_kwh": 42.26252469628942
+    },
+    "HistGradientBoosting_Set_B": {
+      "daylight_mae_kwh": 33.476175333608396,
+      "daylight_rmse_kwh": 58.02216862007088,
+      "capacity_norm_daylight_mae": 0.03748731840269697,
+      "all_hour_mae_kwh": 16.674136731363337,
+      "all_hour_rmse_kwh": 40.87437548833243
+    }
+  },
+  "all_hour_results": {
+    "Latest_Hour_Persistence": {
+      "daylight_mae_kwh": 87.09594495438368,
+      "daylight_rmse_kwh": 152.42610683156335,
+      "capacity_norm_daylight_mae": 0.09753185325238935,
+      "all_hour_mae_kwh": 87.09594495438368,
+      "all_hour_rmse_kwh": 152.42610683156335
+    },
+    "Same_Hour_Previous_Day": {
+      "daylight_mae_kwh": 41.50037330054998,
+      "daylight_rmse_kwh": 101.99407886472419,
+      "capacity_norm_daylight_mae": 0.04647298241942887,
+      "all_hour_mae_kwh": 41.50037330054998,
+      "all_hour_rmse_kwh": 101.99407886472419
+    },
+    "Clear_Sky_Persistence_Hourly": {
+      "daylight_mae_kwh": 36.344260740551086,
+      "daylight_rmse_kwh": 78.24769915829445,
+      "capacity_norm_daylight_mae": 0.04069906017978845,
+      "all_hour_mae_kwh": 36.344260740551086,
+      "all_hour_rmse_kwh": 78.24769915829445
+    },
+    "Last_15m_Persistence": {
+      "daylight_mae_kwh": 45.492923361803086,
+      "daylight_rmse_kwh": 82.75550087872739,
+      "capacity_norm_daylight_mae": 0.05094392313751745,
+      "all_hour_mae_kwh": 45.492923361803086,
+      "all_hour_rmse_kwh": 82.75550087872739
+    },
+    "Clear_Sky_Scaled_15m_Persistence": {
+      "daylight_mae_kwh": 22.013286122196146,
+      "daylight_rmse_kwh": 51.82933242689145,
+      "capacity_norm_daylight_mae": 0.024650936307050553,
+      "all_hour_mae_kwh": 22.013286122196146,
+      "all_hour_rmse_kwh": 51.82933242689145
+    },
+    "Ridge_Set_A": {
+      "daylight_mae_kwh": 23.691775339744034,
+      "daylight_rmse_kwh": 50.0327169912282,
+      "capacity_norm_daylight_mae": 0.02653054349355435,
+      "all_hour_mae_kwh": 23.691775339744034,
+      "all_hour_rmse_kwh": 50.0327169912282
+    },
+    "Ridge_Set_B": {
+      "daylight_mae_kwh": 22.984244699400065,
+      "daylight_rmse_kwh": 48.03160664866709,
+      "capacity_norm_daylight_mae": 0.025738235945576782,
+      "all_hour_mae_kwh": 22.984244699400065,
+      "all_hour_rmse_kwh": 48.03160664866709
+    },
+    "HistGradientBoosting_Set_A": {
+      "daylight_mae_kwh": 17.269151541141778,
+      "daylight_rmse_kwh": 42.26252469628942,
+      "capacity_norm_daylight_mae": 0.019338355589184522,
+      "all_hour_mae_kwh": 17.269151541141778,
+      "all_hour_rmse_kwh": 42.26252469628942
+    },
+    "HistGradientBoosting_Set_B": {
+      "daylight_mae_kwh": 16.674136731363337,
+      "daylight_rmse_kwh": 40.87437548833243,
+      "capacity_norm_daylight_mae": 0.018672045611829044,
+      "all_hour_mae_kwh": 16.674136731363337,
+      "all_hour_rmse_kwh": 40.87437548833243
+    }
+  },
+  "cloud_bins": {
+    "Clear / Low Cloud (<20%)": {
+      "hours": 2781,
+      "mae_base": 32.200265975428565,
+      "mae_hgb_a": 21.717512067462298,
+      "mae_hgb_b": 20.38226814486066,
+      "diff_b_vs_a": 1.335243922601638,
+      "diff_pct": 6.148236126006959
+    },
+    "Mixed / Mid Cloud (20-80%)": {
+      "hours": 579,
+      "mae_base": 70.38217609815204,
+      "mae_hgb_a": 56.34931684899778,
+      "mae_hgb_b": 58.15898519151138,
+      "diff_b_vs_a": -1.8096683425135964,
+      "diff_pct": -3.2115178030694844
+    },
+    "Overcast / High Cloud (>80%)": {
+      "hours": 1027,
+      "mae_base": 58.8678913064924,
+      "mae_hgb_a": 54.62433240333138,
+      "mae_hgb_b": 51.64308177820057,
+      "diff_b_vs_a": 2.981250625130812,
+      "diff_pct": 5.457733749710768
+    }
+  },
+  "monthly_breakdown": [
+    {
+      "month": "2022-10",
+      "daylight_hours": 155,
+      "mae_base": 36.582607655988305,
+      "mae_a": 27.818822469975345,
+      "mae_b": 28.78789105924514,
+      "diff_b_vs_a": -0.9690685892697957,
+      "diff_pct": -3.483499671187393
+    },
+    {
+      "month": "2022-11",
+      "daylight_hours": 297,
+      "mae_base": 51.78697092186375,
+      "mae_a": 41.34448515440959,
+      "mae_b": 40.519043761459066,
+      "diff_b_vs_a": 0.8254413929505233,
+      "diff_pct": 1.9964969689856833
+    },
+    {
+      "month": "2022-12",
+      "daylight_hours": 294,
+      "mae_base": 51.509339595598796,
+      "mae_a": 46.2198117289964,
+      "mae_b": 42.90833261196078,
+      "diff_b_vs_a": 3.311479117035617,
+      "diff_pct": 7.164631341321826
+    },
+    {
+      "month": "2023-01",
+      "daylight_hours": 294,
+      "mae_base": 46.85178423403831,
+      "mae_a": 37.21828748895969,
+      "mae_b": 34.69771160877864,
+      "diff_b_vs_a": 2.520575880181049,
+      "diff_pct": 6.772412301153685
+    },
+    {
+      "month": "2023-02",
+      "daylight_hours": 291,
+      "mae_base": 60.24399551033044,
+      "mae_a": 49.98616864658946,
+      "mae_b": 47.90843251735105,
+      "diff_b_vs_a": 2.07773612923841,
+      "diff_pct": 4.156622092659973
+    },
+    {
+      "month": "2023-03",
+      "daylight_hours": 317,
+      "mae_base": 64.78790605948043,
+      "mae_a": 60.76447006598104,
+      "mae_b": 56.90393112218228,
+      "diff_b_vs_a": 3.8605389437987583,
+      "diff_pct": 6.353283324295919
+    },
+    {
+      "month": "2023-04",
+      "daylight_hours": 354,
+      "mae_base": 37.511436865136915,
+      "mae_a": 27.52570469344031,
+      "mae_b": 27.439125944648918,
+      "diff_b_vs_a": 0.08657874879139271,
+      "diff_pct": 0.31453781022371213
+    },
+    {
+      "month": "2023-05",
+      "daylight_hours": 402,
+      "mae_base": 43.87009185891981,
+      "mae_a": 30.677557749685636,
+      "mae_b": 29.909839540509545,
+      "diff_b_vs_a": 0.7677182091760919,
+      "diff_pct": 2.502540180806795
+    },
+    {
+      "month": "2023-06",
+      "daylight_hours": 437,
+      "mae_base": 40.16551460180733,
+      "mae_a": 26.417603166206924,
+      "mae_b": 26.19623565623678,
+      "diff_b_vs_a": 0.22136750997014332,
+      "diff_pct": 0.837954558471504
+    },
+    {
+      "month": "2023-07",
+      "daylight_hours": 447,
+      "mae_base": 34.14915702621262,
+      "mae_a": 24.005226997037717,
+      "mae_b": 24.539493579941364,
+      "diff_b_vs_a": -0.5342665829036477,
+      "diff_pct": -2.225626039568703
+    },
+    {
+      "month": "2023-08",
+      "daylight_hours": 320,
+      "mae_base": 32.57213428986871,
+      "mae_a": 20.317560358813857,
+      "mae_b": 19.585672649827483,
+      "diff_b_vs_a": 0.731887708986374,
+      "diff_pct": 3.6022420805501754
+    },
+    {
+      "month": "2023-09",
+      "daylight_hours": 364,
+      "mae_base": 26.884596117068472,
+      "mae_a": 21.91518752128238,
+      "mae_b": 20.864296319881372,
+      "diff_b_vs_a": 1.050891201401008,
+      "diff_pct": 4.795264473007413
+    },
+    {
+      "month": "2023-10",
+      "daylight_hours": 336,
+      "mae_base": 40.04462724587982,
+      "mae_a": 32.61315636191286,
+      "mae_b": 30.365629017133664,
+      "diff_b_vs_a": 2.2475273447791935,
+      "diff_pct": 6.891474470726052
+    },
+    {
+      "month": "2023-11",
+      "daylight_hours": 79,
+      "mae_base": 67.38823767443641,
+      "mae_a": 55.73958511665233,
+      "mae_b": 49.15498522280436,
+      "diff_b_vs_a": 6.584599893847965,
+      "diff_pct": 11.813148375732709
+    }
+  ],
+  "generalization_gap": {
+    "Clear_Sky_Scaled_15m_Persistence": {
+      "val_daylight_mae": 42.08905738137258,
+      "eval_daylight_mae": 43.48245817421121,
+      "gap_kwh": 1.3934007928386336,
+      "gap_pct": 3.3106010909508115
+    },
+    "Ridge_Set_A": {
+      "val_daylight_mae": 43.61105786556061,
+      "eval_daylight_mae": 47.006731252819755,
+      "gap_kwh": 3.3956733872591442,
+      "gap_pct": 7.786266954878632
+    },
+    "Ridge_Set_B": {
+      "val_daylight_mae": 42.62262784727765,
+      "eval_daylight_mae": 45.29460805335521,
+      "gap_kwh": 2.6719802060775635,
+      "gap_pct": 6.268924139664997
+    },
+    "HistGradientBoosting_Set_A": {
+      "val_daylight_mae": 32.23875538202052,
+      "eval_daylight_mae": 33.991758580671004,
+      "gap_kwh": 1.7530031986504824,
+      "gap_pct": 5.437564750493216
+    },
+    "HistGradientBoosting_Set_B": {
+      "val_daylight_mae": 31.426163744452307,
+      "eval_daylight_mae": 32.686251452690804,
+      "gap_kwh": 1.2600877082384976,
+      "gap_pct": 4.009677154631838
+    }
+  }
+}

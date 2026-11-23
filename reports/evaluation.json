@@ -22,7 +22,44 @@
     "all_hour_rmse_kwh": 37.7508
   },
   "failure_reasons": [],
-  "final_test_opened": false,
+  "final_test_opened": true,
+  "final_test_opened_at_utc": "2026-11-23T22:26:12.204643+00:00",
+  "final_test_reason": "one-time final evaluation after model selection",
+  "final_test_metrics": {
+    "primary_daylight": {
+      "sample_count": 4387,
+      "candidate_daylight_mae_kwh": 32.6863,
+      "candidate_daylight_rmse_kwh": 56.8483,
+      "candidate_capacity_norm_daylight_mae": 0.0366,
+      "baseline_daylight_mae_kwh": 43.4825,
+      "baseline_daylight_rmse_kwh": 72.2846,
+      "baseline_capacity_norm_daylight_mae": 0.0487,
+      "improvement_pct": 24.83
+    },
+    "all_daylight": {
+      "sample_count": 4601,
+      "candidate_daylight_mae_kwh": 33.4762,
+      "candidate_daylight_rmse_kwh": 58.0222,
+      "candidate_capacity_norm_daylight_mae": 0.0375,
+      "baseline_daylight_mae_kwh": 44.2369,
+      "baseline_daylight_rmse_kwh": 73.5756,
+      "baseline_capacity_norm_daylight_mae": 0.0495,
+      "improvement_pct": 24.33
+    },
+    "all_hour": {
+      "sample_count": 9273,
+      "candidate_all_hour_mae_kwh": 16.6741,
+      "candidate_all_hour_rmse_kwh": 40.8744,
+      "baseline_all_hour_mae_kwh": 22.0133,
+      "baseline_all_hour_rmse_kwh": 51.8293
+    },
+    "generalization_gap": {
+      "candidate_gap_mae_kwh": 1.2601,
+      "candidate_gap_pct": 4.01,
+      "baseline_gap_mae_kwh": 1.3934,
+      "baseline_gap_pct": 3.31
+    }
+  },
   "candidate_model_name": "HistGradientBoosting_Set_B",
   "baseline_champion_name": "Clear-Sky Scaled 15-Minute Persistence"
 }
