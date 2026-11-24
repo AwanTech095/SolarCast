@@ -1,0 +1,50 @@
+schema_version: 1.0.0
+calibrated_at_utc: '2026-11-24T06:28:10.276463+00:00'
+calibration_window:
+  start_utc: '2019-08-03T15:00:00+00:00'
+  end_utc: '2022-10-17T00:00:00+00:00'
+  total_daylight_validation_samples: 13914
+rule_parameters:
+  consecutive_hours_threshold: 2
+  evaluation_cadence: hourly
+  suppression_conditions:
+  - night (solar_elevation_deg <= 0)
+  - missing target (target_kwh is NaN)
+  - missing forecast
+  - quality_flag != 'VALID'
+  reset_conditions:
+  - night
+  - missing or suppressed hour
+  - residual within calibrated bounds
+  - direction flip
+stratification_decision:
+  primary_stratification: forecast_cloud_bin
+  clearsky_index_bins_merged: true
+  justification: 'Clear-sky index cross-stratification rejected: min sub-bin sample
+    size is 85 (< 200 threshold; specifically no_weather x csi_low has 85 and no_weather
+    x csi_high has 154 samples). Merged into the 4 primary forecast cloud-cover bins.'
+bounds:
+  clear:
+    bound_low: -140.66
+    bound_high: 127.94
+    sample_count: 9843
+    mean_residual_kwh: 3.27
+    std_residual_kwh: 41.92
+  mixed:
+    bound_low: -231.18
+    bound_high: 226.24
+    sample_count: 1664
+    mean_residual_kwh: 5.54
+    std_residual_kwh: 78.08
+  no_weather:
+    bound_low: -155.8
+    bound_high: 191.86
+    sample_count: 540
+    mean_residual_kwh: 6.83
+    std_residual_kwh: 53.42
+  overcast:
+    bound_low: -203.7
+    bound_high: 216.3
+    sample_count: 1867
+    mean_residual_kwh: 4.58
+    std_residual_kwh: 74.75
