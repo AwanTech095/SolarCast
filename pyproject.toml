@@ -29,3 +29,6 @@ ignore = []
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "network: marks tests that require live external network access",
+]

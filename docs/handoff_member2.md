@@ -257,6 +257,20 @@ Tracks operational data infrastructure, Feast feature store materialization, and
   - **Metrics**: `injected_zero_detection_rate_pct` (`95.0`), `injected_badval_detection_rate_pct` (`90.0`), `injected_drop30_detection_rate_pct` (`60.0`), `isolated_single_hour_compliance_pct` (`100.0`), `unmodified_fa_per_1000h` (`0.43`), `natural_sz_detection_rate_pct` (`13.95`), `natural_sz_median_delay_h` (`3.0`).
   - **Artifacts**: `deviation.yaml`, `alert_event_schema.json`, `deviation_summary.json`.
 
+### 4.3 Model Registry, Cryptographic Lineage & Resolver
+The MLflow Model Registry (`solarcast-f1`) is configured on the local file store and will migrate cleanly to the shared server:
+- **Alias `champion`**: Points to **Version 4** (`f7fef3f7bdf241c5a53dc50d8e4713f9`).
+- **Version 4 Tags**: `mode=F1`, `feature_set=B`, `schema_version=1.1.0`, `gate_eligible=true`, `final_test_opened=true`, `bundle_sha256=f72de152727fd406ac35a08cfa83289b6a61b031e0b3f4eb52008288e3980619`, `source_run_id=f7fef3f7bdf241c5a53dc50d8e4713f9`, `status=champion`.
+- **Versions 1–3**: Tagged with `status=superseded` with factual run-derived descriptions.
+- **Registry Snapshot**: `reports/model_registry_status.json`.
+- **Lineage Helper**: `src/models/lineage.py` (`log_lineage(run)`) is stdlib-only and automatically sets full provenance hashes (data files, manifest, feature schema, configs, bundle, git commit/dirty status) across both `.venv` and `.venv-feast`.
+- **Lineage Verification CLI**:
+  ```powershell
+  python scripts/resolve_run.py champion
+  python scripts/resolve_run.py <run_id>
+  ```
+  See `docs/mlflow_lineage.md` for complete audit methodology and shared server migration details.
+
 ---
 
 ## 5. `evaluation.json` Schema & Acceptance Gate Semantics

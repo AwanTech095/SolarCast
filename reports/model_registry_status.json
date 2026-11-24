@@ -1,0 +1,59 @@
+{
+  "model_name": "solarcast-f1",
+  "tracking_uri": "file:./mlruns",
+  "backend": "local_file_store",
+  "operations": {
+    "set_registered_model_alias": "SUCCESS"
+  },
+  "versions": {
+    "v1": {
+      "version": 1,
+      "run_id": "88c574915ce7417c83a4911cc4b1f127",
+      "current_stage": "None",
+      "aliases": [],
+      "tags": {
+        "status": "superseded"
+      },
+      "description": "HistGradientBoosting Set A candidate (23 features). Cross-validation daylight MAE: 32.24 kWh. Initial benchmark against ClearSkyPersistence baseline (+57.36% improvement)."
+    },
+    "v2": {
+      "version": 2,
+      "run_id": "7b64f8c9349e4943bbeb094672fabb80",
+      "current_stage": "None",
+      "aliases": [],
+      "tags": {
+        "status": "superseded"
+      },
+      "description": "HistGradientBoosting Set A candidate (23 features). Cross-validation daylight MAE: 32.24 kWh. Evaluated against fair 15-minute Clear-Sky Scaled Persistence champion baseline (+23.56% improvement)."
+    },
+    "v3": {
+      "version": 3,
+      "run_id": "555ba709d826442f99d139605cc90e70",
+      "current_stage": "None",
+      "aliases": [],
+      "tags": {
+        "status": "superseded"
+      },
+      "description": "HistGradientBoosting Set B candidate (29 features) incorporating NOAA HRRR forecast weather features (TMP, TCDC). Cross-validation daylight MAE: 31.46 kWh (+25.25% vs baseline)."
+    },
+    "v4": {
+      "version": 4,
+      "run_id": "f7fef3f7bdf241c5a53dc50d8e4713f9",
+      "current_stage": "None",
+      "aliases": [
+        "champion"
+      ],
+      "tags": {
+        "bundle_sha256": "f72de152727fd406ac35a08cfa83289b6a61b031e0b3f4eb52008288e3980619",
+        "feature_set": "B",
+        "final_test_opened": "true",
+        "gate_eligible": "true",
+        "mode": "F1",
+        "schema_version": "1.1.0",
+        "source_run_id": "f7fef3f7bdf241c5a53dc50d8e4713f9",
+        "status": "champion"
+      },
+      "description": "HistGradientBoosting Set B champion with sanitized weather range bounds (29 features). Cross-validation daylight MAE: 31.43 kWh (+25.33% vs champion baseline, +2.52% vs Set A). Final test evaluation daylight MAE: 32.69 kWh. Bundled as models/solarcast_f1_bundle.joblib."
+    }
+  }
+}

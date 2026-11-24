@@ -21,6 +21,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from src.features.preprocessing import get_feature_names
 from src.models.bundle import load_bundle
+from src.models.lineage import log_lineage
 
 DEFAULT_EVAL_CONFIG = Path("configs/evaluation.yaml")
 DEFAULT_DEVIATION_CONFIG = Path("configs/deviation.yaml")
@@ -895,6 +896,7 @@ def main() -> int:
 
             mlflow.set_experiment("solarcast")
             with mlflow.start_run(run_name="deviation_detector") as run:
+                log_lineage(run)
                 mlflow.set_tags(
                     {
                         "data_window": "2018-07-12 to 2023-11-09",
