@@ -474,3 +474,43 @@ When production deviation alerts or feature drift are detected, an automated ret
   3. Retraining trigger policy check (team plan proposal: 24-hour cooldown, at most one active retraining run per site, and minimum number of new labels; Member 2 decides).
   4. DVC snapshot tagging and S3 remote push.
   5. Notification integration (Slack, email, or monitoring dashboard).
+
+---
+
+## 11. Artifact Packet Specification, Verification & Ingestion
+
+To facilitate DVC initialization, CI/CD runner setup, and pipeline replication without downloading multi-gigabyte raw datasets, Member 1 has packaged an offline artifact packet outside the repository at `D:\SolarCast_packet` and compressed archive `D:\SolarCast_packet.zip`.
+
+### 11.1 Packet Summary & Key Metrics
+- **Packet Directory**: `D:\SolarCast_packet` (never committed to Git)
+- **Compressed Archive**: `D:\SolarCast_packet.zip` (13,535,820 bytes, ~12.91 MB; SHA-256: `93504e87d870e7881235d3de1fbedbff712492ae567abb05107af5536e797e21`)
+- **Total Payload Files**: 31 files (28,116,883 bytes uncompressed, ~26.81 MB)
+- **Inclusions**:
+  - `data/raw/`: 20 files (raw 15-minute active power meter CSV, site metadata JSONs, raw environment samples, 7 annual NASA POWER hourly weather JSON files).
+  - `data/processed/`: 7 files (`hourly.parquet`, `quarter_hourly.parquet`, `quarantine.parquet`, `hrrr_coverage_scan.parquet`, `hrrr_forecast_features.parquet`, `feast/features_set_b.parquet`, `validation_residuals.parquet`).
+  - `models/`: Champion bundle (`solarcast_f1_bundle.joblib`).
+  - Convenience files: `reports/evaluation.json`, `reports/final_test_audit.json`, `configs/data_manifest.json`.
+- **Exclusions**:
+  - `data/processed/hrrr_parts/`: Intermediate raw monthly chunk files prior to merge (superseded by `hrrr_forecast_features.parquet`).
+  - `data/processed/june_week_extracted.parquet` and `mixed_week_extracted.parquet`: Exploratory samples from early M1.1b feasibility check, not used in documented production pipelines.
+  - `mlruns/`: Excluded due to absolute Windows file paths in local store; runs will be re-logged to the shared server by running `python -m src.models.train` once Member 2 configures the central tracking URI.
+
+### 11.2 Verification & Installation Commands
+```powershell
+# 1. Verify every file against CHECKSUMS.sha256:
+python scripts/verify_artifact_packet.py D:\SolarCast_packet
+
+# 2. Verify and install into a clean repository clone:
+python scripts/verify_artifact_packet.py D:\SolarCast_packet --install C:\path\to\SolarCast
+```
+
+### 11.3 Initializing DVC Tracking for the Packet
+```powershell
+dvc add data/raw
+dvc add data/processed
+dvc add models
+git add data/.gitignore data/raw.dvc data/processed.dvc models/.gitignore models.dvc
+git commit -m "chore(dvc): track raw/processed datasets and model bundle"
+dvc push
+```
+
