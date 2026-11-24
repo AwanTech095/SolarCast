@@ -633,6 +633,7 @@ class TestHRRRExtraction:
         assert cfg.num_threads == 8
         assert captured_kwargs["parts_dir"] == Path("data/test_parts")
 
+    @pytest.mark.network
     def test_regression_june_week_sample(self) -> None:
         """Regression test against data/processed/june_week_extracted.parquet."""
         june_path = Path("data/processed/june_week_extracted.parquet")
