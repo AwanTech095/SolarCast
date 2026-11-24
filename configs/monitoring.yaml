@@ -1,0 +1,67 @@
+# SolarCast Monitoring Configuration
+# Frozen based on empirical validation evidence on PVDAQ Site 2107 (Train/Dev partition 2018-2022)
+schema_version: "1.1.0"
+site_id: "2107"
+model_name: "solarcast-f1"
+model_version: "v2"
+
+# 1. Input Feature Drift Monitoring
+input_drift:
+  evaluation_cadence: "daily"
+  rolling_window_days: 14
+  psi_threshold: 0.20
+  min_drifted_features: 2
+  consecutive_checks_required: 2
+  min_valid_rows: 200
+  num_quantile_bins: 10
+  seasonal_match:
+    calendar_month_window: 1  # Matches target month +/- 1 month
+    match_daylight_hours: true
+  monitored_features:
+    - "power_kw_lag_0m"
+    - "energy_kwh_prev_day_same_hour"
+    - "energy_kwh_rolling_mean_24h"
+    - "clearsky_ghi_target_wm2"
+    - "clearsky_index_latest_avail"
+    - "tmp_c"
+    - "tcdc_pct"
+    - "clearsky_ghi_cloud_adj_wm2"
+
+# 2. Performance Monitoring & Delayed Labels
+performance:
+  evaluation_cadence: "daily"
+  rolling_window_days: 7
+  metric_name: "daylight_mae_kwh"
+  degradation_threshold_ratio: 1.25  # 7-day MAE > 1.25 * reference MAE
+  consecutive_checks_required: 2
+  min_valid_labels: 30
+  denominator_floor_kwh: 1.0
+  label_delay_minutes: 15
+  # Reference definition selected strictly on validation evidence:
+  # 'month_specific' is selected over 'fixed' because fixed reference (31.43 kWh)
+  # produces 258 false alert days on Train/Dev (concentrated heavily in winter: 57 in Jan, 36 in Nov),
+  # whereas month-specific reference halves false alarms to 127 days.
+  reference_definition: "month_specific"
+  fixed_reference_mae_kwh: 31.43
+  month_specific_reference_mae_kwh:
+    1: 50.64
+    2: 39.06
+    3: 44.01
+    4: 37.65
+    5: 29.91
+    6: 23.25
+    7: 16.67
+    8: 21.84
+    9: 28.51
+    10: 29.62
+    11: 36.66
+    12: 39.56
+
+# 3. Weather Freshness & Quality Monitoring
+weather_freshness:
+  evaluation_cadence: "daily"
+  rolling_window_days: 7
+  nominal_lag_hours: 2.0       # From configs/data.yaml weather_availability_lag_hours
+  max_fallback_hours: 8.0      # Fallback cutoff before weather is classified as stale
+  non_fresh_share_threshold: 0.15  # Trigger DQ alert if (fallback + stale + missing) > 15%
+  min_eval_hours: 30

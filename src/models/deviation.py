@@ -356,6 +356,7 @@ def detect_deviations(
                 "schema_version": schema_ver,
                 "event_id": f"DEV-{start_ts.strftime('%Y%m%d%H%M')}-{event_counter:03d}",
                 "site_id": site_id,
+                "alert_type": "residual_deviation",
                 "model_name": model_name,
                 "model_version": model_version,
                 "window_start_utc": start_ts.isoformat(),

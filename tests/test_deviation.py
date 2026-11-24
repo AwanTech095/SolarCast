@@ -175,7 +175,8 @@ def test_alert_event_matches_schema(alert_schema: dict):
         assert field in ev, f"Missing required schema field '{field}' in alert event"
 
     # Type and value constraints
-    assert ev["schema_version"] == "1.0.0"
+    assert ev["schema_version"] in ("1.0.0", "1.1.0")
+    assert ev["alert_type"] == "residual_deviation"
     assert ev["site_id"] == "2107"
     assert ev["model_name"] == "solarcast-f1"
     assert ev["consecutive_hours"] == 3

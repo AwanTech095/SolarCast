@@ -1,29 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SolarCast Alert Event Schema",
-  "description": "Schema definition for SolarCast Mode F1 solar energy deviation alert events.",
+  "description": "Schema definition for SolarCast Mode F1 solar energy alert events: residual deviations, input feature drift, model performance degradation, and weather data quality.",
   "type": "object",
   "required": [
     "schema_version",
     "event_id",
     "site_id",
+    "alert_type",
     "model_name",
     "model_version",
     "window_start_utc",
     "window_end_utc",
-    "direction",
-    "bin",
-    "consecutive_hours",
-    "mean_residual_kwh",
-    "bound_low",
-    "bound_high",
     "reason",
     "created_at_utc"
   ],
   "properties": {
     "schema_version": {
       "type": "string",
-      "description": "Alert event schema version",
+      "description": "Alert event schema version (e.g. '1.1.0')",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
     },
     "event_id": {
@@ -34,9 +29,20 @@
       "type": "string",
       "description": "Identifier of the PV site (e.g. '2107')"
     },
+    "alert_type": {
+      "type": "string",
+      "description": "Type of operational alert event",
+      "enum": [
+        "residual_deviation",
+        "input_drift",
+        "performance_degradation",
+        "data_quality"
+      ],
+      "default": "residual_deviation"
+    },
     "model_name": {
       "type": "string",
-      "description": "Name of the forecasting model producing the reference predictions"
+      "description": "Name of the forecasting model producing predictions or evaluated"
     },
     "model_version": {
       "type": "string",
@@ -44,22 +50,31 @@
     },
     "window_start_utc": {
       "type": "string",
-      "description": "UTC timestamp of the first anomalous hour initiating the alert episode",
+      "description": "UTC timestamp of the start of the evaluation window or anomalous episode",
       "format": "date-time"
     },
     "window_end_utc": {
       "type": "string",
-      "description": "UTC timestamp of the latest anomalous hour in the episode",
+      "description": "UTC timestamp of the end of the evaluation window or anomalous episode",
+      "format": "date-time"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable description of the alert trigger rationale"
+    },
+    "created_at_utc": {
+      "type": "string",
+      "description": "Timestamp when the alert event record was generated",
       "format": "date-time"
     },
     "direction": {
       "type": "string",
-      "description": "Direction of deviation relative to expectation (negative for underproduction, positive for overproduction)",
+      "description": "Direction of residual deviation relative to expectation (negative for underproduction, positive for overproduction)",
       "enum": ["negative", "positive"]
     },
     "bin": {
       "type": "string",
-      "description": "Operating condition bin evaluated for the alert event",
+      "description": "Operating condition bin evaluated for residual deviation",
       "enum": ["clear", "mixed", "overcast", "no_weather"]
     },
     "consecutive_hours": {
@@ -79,14 +94,54 @@
       "type": "number",
       "description": "Calibrated 99th percentile upper bound in kWh for the operating bin"
     },
-    "reason": {
-      "type": "string",
-      "description": "Human-readable description of the alert trigger rationale"
+    "drift_details": {
+      "type": "object",
+      "description": "Detailed payload for input_drift alert events",
+      "properties": {
+        "drifted_features": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "drifted_feature_count": {"type": "integer"},
+        "psi_scores": {
+          "type": "object",
+          "additionalProperties": {"type": "number"}
+        },
+        "consecutive_checks": {"type": "integer"},
+        "valid_current_rows": {"type": "integer"},
+        "valid_reference_rows": {"type": "integer"}
+      }
     },
-    "created_at_utc": {
-      "type": "string",
-      "description": "Timestamp when the alert event record was generated",
-      "format": "date-time"
+    "performance_details": {
+      "type": "object",
+      "description": "Detailed payload for performance_degradation alert events",
+      "properties": {
+        "metric_name": {"type": "string"},
+        "mae_7d_kwh": {"type": "number"},
+        "reference_mae_kwh": {"type": "number"},
+        "reference_definition": {"type": "string"},
+        "degradation_ratio": {"type": "number"},
+        "consecutive_checks": {"type": "integer"},
+        "valid_label_count": {"type": "integer"}
+      }
+    },
+    "quality_details": {
+      "type": "object",
+      "description": "Detailed payload for data_quality alert events",
+      "properties": {
+        "total_hours": {"type": "integer"},
+        "non_fresh_share": {"type": "number"},
+        "threshold": {"type": "number"},
+        "breakdown": {
+          "type": "object",
+          "properties": {
+            "fresh": {"type": "integer"},
+            "fallback": {"type": "integer"},
+            "stale": {"type": "integer"},
+            "missing": {"type": "integer"}
+          }
+        }
+      }
     }
   },
   "additionalProperties": false
