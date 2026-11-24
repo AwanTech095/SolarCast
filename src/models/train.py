@@ -35,6 +35,7 @@ from src.models.evaluate import (
     evaluate_candidate_gate,
     write_evaluation_json,
 )
+from src.models.lineage import log_lineage
 from src.models.tune import (
     build_hgb_model,
     build_ridge_pipeline,
@@ -532,6 +533,7 @@ def run_training_pipeline(
         run_name = f"{name}_15mDelay"
         with mlflow.start_run(run_name=run_name) as run:
             run_id = run.info.run_id
+            log_lineage(run)
             improvement = float(
                 (base_metrics["daylight_mae_kwh"] - rec["metrics"]["daylight_mae_kwh"])
                 / base_metrics["daylight_mae_kwh"]
@@ -564,6 +566,7 @@ def run_training_pipeline(
             if name == best_candidate_name:
                 bundle.mlflow_run_id = run_id
                 save_bundle(bundle, bundle_path)
+                log_lineage(run)
 
                 for _p_name, p_file in plots.items():
                     mlflow.log_artifact(str(p_file), artifact_path="plots")

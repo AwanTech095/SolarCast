@@ -40,6 +40,7 @@ from src.models.drift import (
     WeatherFreshnessMonitor,
     load_operational_lags,
 )
+from src.models.lineage import log_lineage
 from src.models.performance_monitor import (
     DEFAULT_MONITORING_CONFIG,
     PerformanceMonitor,
@@ -442,6 +443,7 @@ def _log_to_mlflow(
     mlflow.set_experiment("solarcast")
 
     with mlflow.start_run(run_name="monitoring_replay") as run:
+        log_lineage(run)
         mlflow.set_tags({
             "site_id": "2107",
             "model_name": "solarcast-f1",

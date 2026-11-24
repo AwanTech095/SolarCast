@@ -30,6 +30,7 @@ import yaml
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.features.preprocessing import build_features
+from src.models.lineage import log_lineage
 
 DEFAULT_CAPACITY_KWH = 893.0
 DEFAULT_EVAL_CONFIG = Path("configs/evaluation.yaml")
@@ -816,6 +817,7 @@ def run_final_test_evaluation(
     duration_sec = time.time() - start_time
 
     with mlflow.start_run(run_name=run_name) as run:
+        log_lineage(run)
         mlflow.log_params({
             "eval_mode": mode,
             "partition": partition_name,

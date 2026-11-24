@@ -95,14 +95,22 @@ def materialize_features(
 
     if log_mlflow:
         import os
+        import sys
 
         import feast
         import mlflow
+
+        _repo_root = str(Path(__file__).resolve().parents[1])
+        if _repo_root not in sys.path:
+            sys.path.insert(0, _repo_root)
+
+        from src.models.lineage import log_lineage
 
         os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
         git_commit = _get_git_commit()
         mlflow.set_experiment("solarcast")
         with mlflow.start_run(run_name="feature_store_materialization") as run:
+            log_lineage(run)
             mlflow.set_tags(
                 {
                     "feast_repo_git_commit": git_commit,
