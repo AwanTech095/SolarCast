@@ -430,8 +430,10 @@ When production deviation alerts or feature drift are detected, an automated ret
 |                                                                                         |
 |  1. Ingestion Webhook / Event Consumer:                                                 |
 |     - Validates payload against configs/alert_event_schema.json                         |
-|     - Evaluates Cooldown: Enforces >= 7 days cooldown since last retraining run         |
-|       (prevents pipeline thrashing during prolonged soiling or inverter outages)       |
+|     - Retraining Trigger Policy (team plan proposal; Member 2 decides):                 |
+|       * 24-hour cooldown between retraining runs                                        |
+|       * At most one active retraining run per site                                      |
+|       * Minimum number of new verified labels before triggering                         |
 |                                                                                         |
 |  2. Dataset Ingestion & Update:                                                         |
 |     - Ingests recent generation data up to latest verified date                        |
@@ -467,6 +469,6 @@ When production deviation alerts or feature drift are detected, an automated ret
 - **Member 2 Builds**:
   1. Airflow DAG or Kubeflow Pipeline orchestrating steps 1 to 4.
   2. Event listener/webhook queue consuming deviation alert events.
-  3. Cooldown timer check (preventing retraining thrashing within 7 days of previous run).
+  3. Retraining trigger policy check (team plan proposal: 24-hour cooldown, at most one active retraining run per site, and minimum number of new labels; Member 2 decides).
   4. DVC snapshot tagging and S3 remote push.
   5. Notification integration (Slack, email, or monitoring dashboard).
