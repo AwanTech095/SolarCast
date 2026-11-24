@@ -26,3 +26,13 @@ This file is a public-data excerpt from the **NLR/NREL PVDAQ 2023 Solar Data Pri
 - **Source System:** System 2107 (Farm Solar Array, Arbuckle, CA)
 - **Attribution / DOI:** [10.25984/1846021](https://doi.org/10.25984/1846021)
 - **Licence:** US Department of Energy (DOE) Open Data Policy / AWS Open Data Sponsorship Program. Educational and research reuse permitted with attribution.
+
+---
+
+## 3. Feature Set B Fixture: `features_sample.csv`
+- **File:** `features_sample.csv`
+- **Rows:** 48 daylight hours (`2023-06-13 13:00:00+00:00` to `2023-06-16 15:00:00+00:00`)
+- **Size:** ~24.5 KB (< 200 KB)
+- **Contents:** All 29 Feature Set B model features conforming to `configs/feature_schema.json` (v1.1.0), along with `site_id`, `event_timestamp`, `created_timestamp`, audit non-leakage columns (`production_cutoff_utc`, `weather_available_at_utc`, `source_event_time_max_utc`), and `attribution`.
+- **Attribution & Provenance:** Production telemetry from NREL PVDAQ System 2107 (DOI 10.25984/1846021); forecast weather from NOAA HRRR MesoWest AWS Zarr archive (AWS Open Data Sponsorship Program). Educational and research reuse permitted.
+

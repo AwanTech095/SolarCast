@@ -1,0 +1,76 @@
+[
+  {
+    "example_id": "example_1_clear_morning",
+    "status_code": 200,
+    "site_id": "2107",
+    "issue_time_utc": "2023-06-15T15:00:00+00:00",
+    "interval_start_utc": "2023-06-15T15:00:00+00:00",
+    "interval_end_utc": "2023-06-15T16:00:00+00:00",
+    "predicted_energy_kwh": 220.52746243930602,
+    "model_name": "solarcast-f1",
+    "model_version": "1.1.0",
+    "feature_schema_version": "1.1.0",
+    "feature_staleness_hours": 0.0,
+    "warnings": []
+  },
+  {
+    "example_id": "example_2_clear_solar_noon",
+    "status_code": 200,
+    "site_id": "2107",
+    "issue_time_utc": "2023-06-15T19:00:00+00:00",
+    "interval_start_utc": "2023-06-15T19:00:00+00:00",
+    "interval_end_utc": "2023-06-15T20:00:00+00:00",
+    "predicted_energy_kwh": 659.6227115927019,
+    "model_name": "solarcast-f1",
+    "model_version": "1.1.0",
+    "feature_schema_version": "1.1.0",
+    "feature_staleness_hours": 0.0,
+    "warnings": []
+  },
+  {
+    "example_id": "example_3_nighttime",
+    "status_code": 200,
+    "site_id": "2107",
+    "issue_time_utc": "2023-06-15T06:00:00+00:00",
+    "interval_start_utc": "2023-06-15T06:00:00+00:00",
+    "interval_end_utc": "2023-06-15T07:00:00+00:00",
+    "predicted_energy_kwh": 0.0,
+    "model_name": "solarcast-f1",
+    "model_version": "1.1.0",
+    "feature_schema_version": "1.1.0",
+    "feature_staleness_hours": 0.0,
+    "warnings": [
+      "night_forced_zero"
+    ]
+  },
+  {
+    "example_id": "example_4_weather_missing",
+    "status_code": 200,
+    "site_id": "2107",
+    "issue_time_utc": "2023-08-16T16:00:00+00:00",
+    "interval_start_utc": "2023-08-16T16:00:00+00:00",
+    "interval_end_utc": "2023-08-16T17:00:00+00:00",
+    "predicted_energy_kwh": 383.72427439613193,
+    "model_name": "solarcast-f1",
+    "model_version": "1.1.0",
+    "feature_schema_version": "1.1.0",
+    "feature_staleness_hours": 0.0,
+    "warnings": [
+      "weather_missing"
+    ]
+  },
+  {
+    "example_id": "example_5_stale_rejection",
+    "status_code": 503,
+    "site_id": "2107",
+    "issue_time_utc": "2023-06-15T20:00:00+00:00",
+    "interval_start_utc": "2023-06-15T20:00:00+00:00",
+    "interval_end_utc": "2023-06-15T21:00:00+00:00",
+    "error": "StaleFeatureError",
+    "message": "Online store features are stale for issue_time_utc=2023-06-15T20:00:00+00:00. Feature event_timestamp=2023-06-15T15:00:00+00:00 is 5.00 hours old (exceeds max_staleness_hours=2.0h).",
+    "feature_staleness_hours": 5.0,
+    "warnings": [
+      "stale_features"
+    ]
+  }
+]
