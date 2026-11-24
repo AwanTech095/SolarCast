@@ -99,6 +99,8 @@ def join_predictions_with_delayed_labels(
     v_clock = pd.to_datetime(virtual_clock_utc, utc=True)
 
     preds = predictions_df.copy()
+    if pred_time_col not in preds.columns and "event_timestamp" in preds.columns:
+        pred_time_col = "event_timestamp"
     preds[pred_time_col] = pd.to_datetime(preds[pred_time_col], utc=True)
 
     acts = actuals_df.copy()
@@ -121,20 +123,25 @@ def join_predictions_with_delayed_labels(
     acts_visible.loc[~is_visible, "quality_flag"] = "UNAVAILABLE_PENDING"
 
     # Merge predictions with visible actuals
-    merge_cols = [pred_time_col]
+    left_on = [pred_time_col]
+    right_on = [actual_time_col]
     if site_col in preds.columns and site_col in acts.columns:
-        merge_cols.append(site_col)
+        left_on.append(site_col)
+        right_on.append(site_col)
 
-    actual_keep = merge_cols + ["target_kwh", "quality_flag", "actual_available_at_utc"]
+    actual_keep = right_on + ["target_kwh", "quality_flag", "actual_available_at_utc"]
     if "is_daylight" in acts_visible.columns and "is_daylight" not in preds.columns:
         actual_keep.append("is_daylight")
 
     joined = pd.merge(
         preds,
         acts_visible[actual_keep],
-        on=merge_cols,
+        left_on=left_on,
+        right_on=right_on,
         how="left",
     )
+    if "interval_start_utc" not in joined.columns and pred_time_col in joined.columns:
+        joined["interval_start_utc"] = joined[pred_time_col]
     return joined
 
 

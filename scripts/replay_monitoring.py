@@ -66,6 +66,7 @@ def run_monitoring_replay(
     monitoring_config_path: Path = DEFAULT_MONITORING_CONFIG,
     data_config_path: Path = DEFAULT_DATA_CONFIG,
     seed: int = 42,
+    log_mlflow: bool = False,
 ) -> dict[str, Any]:
     """Execute chronological virtual-clock monitoring replay across all scenarios."""
     np.random.seed(seed)
@@ -422,7 +423,72 @@ def run_monitoring_replay(
             f.write(json.dumps(ev) + "\n")
 
     print("[REPLAY] Replay complete successfully!")
+
+    if log_mlflow:
+        _log_to_mlflow(summary_data, events_out_path, summary_out_path)
+
     return summary_data
+
+
+def _log_to_mlflow(
+    summary_data: dict[str, Any],
+    events_out_path: Path,
+    summary_out_path: Path,
+) -> None:
+    """Log monitoring replay parameters, metrics, tags, and artifacts to MLflow."""
+    import mlflow
+
+    mlflow.set_tracking_uri("file:./mlruns")
+    mlflow.set_experiment("solarcast")
+
+    with mlflow.start_run(run_name="monitoring_replay") as run:
+        mlflow.set_tags({
+            "site_id": "2107",
+            "model_name": "solarcast-f1",
+            "model_version": "v2",
+            "schema_version": "1.1.0",
+            "pipeline_step": "monitoring_replay",
+            "eval_window": "2022-10-31 to 2023-11-09",
+            "author": "Member 1",
+        })
+        mlflow.log_params({
+            "psi_threshold": 0.20,
+            "drift_min_features": 2,
+            "drift_min_valid_rows": 200,
+            "drift_window_days": 14,
+            "perf_degradation_ratio": 1.25,
+            "perf_min_valid_labels": 30,
+            "perf_window_days": 7,
+            "perf_reference_definition": "month_specific",
+            "weather_freshness_threshold": 0.15,
+            "random_seed": summary_data.get("random_seed", 42),
+        })
+        base = summary_data["unmodified_test_baseline"]
+        scen = summary_data["injected_fault_scenarios"]
+        mlflow.log_metrics({
+            "baseline_drift_alerts": base["input_drift"]["alert_count"],
+            "baseline_drift_rate_per_100d": base["input_drift"]["false_alerts_per_100_days"],
+            "baseline_perf_alerts": base["performance_degradation"]["alert_count"],
+            "baseline_perf_rate_per_100d": (
+                base["performance_degradation"]["false_alerts_per_100_days"]
+            ),
+            "baseline_dq_alerts": base["data_quality_freshness"]["alert_count"],
+            "baseline_dq_rate_per_100d": (
+                base["data_quality_freshness"]["false_alerts_per_100_days"]
+            ),
+            "scenario_a_delay_days": scen["scenario_a_weather_shift"]["detection_delay_days"],
+            "scenario_a_delay_hours": scen["scenario_a_weather_shift"]["detection_delay_hours"],
+            "scenario_b_delay_days": scen["scenario_b_performance_drop"]["detection_delay_days"],
+            "scenario_b_delay_hours": scen["scenario_b_performance_drop"]["detection_delay_hours"],
+            "scenario_c_accuracy_alerts": scen["scenario_c_label_outage"]["accuracy_alerts_raised"],
+        })
+        mlflow.log_artifact(str(summary_out_path))
+        mlflow.log_artifact(str(events_out_path))
+        if Path("configs/monitoring.yaml").exists():
+            mlflow.log_artifact("configs/monitoring.yaml")
+        if Path("configs/alert_event_schema.json").exists():
+            mlflow.log_artifact("configs/alert_event_schema.json")
+        print(f"[REPLAY] Logged monitoring_replay to MLflow (run_id: {run.info.run_id})")
 
 
 if __name__ == "__main__":
@@ -433,6 +499,7 @@ if __name__ == "__main__":
     parser.add_argument("--events-out", type=Path, default=DEFAULT_EVENTS_OUT)
     parser.add_argument("--summary-out", type=Path, default=DEFAULT_SUMMARY_OUT)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--log-mlflow", action="store_true", help="Log results to MLflow")
     args = parser.parse_args()
 
     run_monitoring_replay(
@@ -442,4 +509,5 @@ if __name__ == "__main__":
         events_out_path=args.events_out,
         summary_out_path=args.summary_out,
         seed=args.seed,
+        log_mlflow=args.log_mlflow,
     )
