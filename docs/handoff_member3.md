@@ -265,18 +265,19 @@ To avoid cardinality explosion in Prometheus / Grafana, use fixed low-cardinalit
 
 ---
 
-## 8. Production Alert Event Schema
+## 8. Production Alert Event Schema (v1.1.0)
 
-When the deviation engine flags an anomalous episode, an alert event conforming to `configs/alert_event_schema.json` is emitted:
+When operational monitoring flags an anomalous event (residual deviation, input feature drift, performance degradation, or weather data quality degradation), an alert event conforming to `configs/alert_event_schema.json` (v1.1.0) is emitted:
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "event_id": "DEV-202306151600-001",
   "site_id": "2107",
+  "alert_type": "residual_deviation",
   "model_name": "solarcast-f1",
-  "model_version": "1.1.0",
+  "model_version": "v2",
   "window_start_utc": "2023-06-15T15:00:00+00:00",
   "window_end_utc": "2023-06-15T16:00:00+00:00",
   "direction": "negative",
@@ -289,4 +290,11 @@ When the deviation engine flags an anomalous episode, an alert event conforming 
   "created_at_utc": "2023-06-15T17:15:00.000000+00:00"
 }
 ```
+
+### Supported Alert Types (`alert_type`):
+1. `residual_deviation`: Emitted by `src/models/deviation.py` when ground-truth production breaches calibrated 1st/99th percentile residual bounds for 2 consecutive hours.
+2. `input_drift`: Emitted by `src/models/drift.py` when $\ge 2$ monitored features exceed PSI $> 0.20$ against a season-matched daylight reference on 2 consecutive daily evaluations ($\ge 200$ valid rows). Includes `drift_details` payload.
+3. `performance_degradation`: Emitted by `src/models/performance_monitor.py` when 7-day daylight MAE exceeds $1.25 \times$ reference MAE on 2 consecutive daily evaluations ($\ge 30$ valid labels). Includes `performance_details` payload.
+4. `data_quality`: Emitted by `src/models/drift.py` (`WeatherFreshnessMonitor`) when non-fresh NWP weather (fallback, stale, or missing) exceeds 15% in trailing 7 days. Includes `quality_details` payload.
+
 Member 3's service or Member 2's monitoring agent can publish this JSON payload directly to Slack, PagerDuty, or the retraining queue.

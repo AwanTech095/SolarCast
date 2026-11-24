@@ -419,9 +419,11 @@ When production deviation alerts or feature drift are detected, an automated ret
 +-----------------------------------------------------------------------------------------+
 |                                    TRIGGER SOURCES                                      |
 |                                                                                         |
-|  [ Production Deviation Alert ]        [ Feature / Prediction Drift ]                   |
-|   configs/alert_event_schema.json       Evidently / Custom PSI Monitor                  |
-|   (2 consecutive anomalous hours)       (PSI > 0.20 on >= 2 features)                   |
+|  [ Operational Alert Event Stream (configs/alert_event_schema.json v1.1.0) ]            |
+|   - residual_deviation: 2 consecutive hours breaching P1/P99 residual bounds             |
+|   - input_drift: PSI > 0.20 in >= 2 features on 2 consecutive days (>= 200 rows)        |
+|   - performance_degradation: 7-day daylight MAE > 1.25x ref MAE on 2 days (>= 30 labels)|
+|   - data_quality: Non-fresh weather share > 15% over trailing 7 days                    |
 +-----------------------------------------------------------------------------------------+
                                              │
                                              ▼
