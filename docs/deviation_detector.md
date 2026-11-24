@@ -3,7 +3,10 @@
 ## 1. Overview & Purpose
 The SolarCast Production Deviation Detector (Task M1.6) monitors real-time solar generation anomalies by comparing measured plant output (`actual_kwh`) against advance hourly forecasts (`forecast_kwh`) produced by the champion forecasting pipeline (`models/solarcast_f1_bundle.joblib`, Feature Set B).
 
-The residual is defined as:
+Operational timing conventions:
+- **Issue Time ($H$ UTC)**: Start of the target hourly interval $[H, H+1\text{h})$ UTC.
+- **Production Telemetry Cutoff**: $H - 15\text{ minutes}$ UTC (latest usable 15-minute generation reading is $[H-30\text{m}, H-15\text{m})$).
+- **Residual Calculation**: Evaluated once the target hour closes and measured meter data arrives:
 $$\text{residual} = \text{actual\_kwh} - \text{forecast\_kwh}$$
 
 - **Negative Residual ($\text{actual} < \text{forecast}$)**: Underproduction relative to expectation (e.g., equipment curtailment, unanticipated cloud cover, tracker/inverter trips, soiling).
@@ -35,8 +38,9 @@ Bounds are set to the 1st percentile (`bound_low`) and 99th percentile (`bound_h
 
 ## 3. Alerting Rule & State Machine
 - **2-Hour Consecutive Breach Rule**: An alert event triggers only after **2 consecutive hourly intervals** outside calibrated bounds in the **same direction** (`consecutive_hours >= 2`).
+- **Alert Trigger Timing**: Because hourly production energy over $[H, H+1\text{h})$ is integrated only after the hour has ended (with telemetry available at $H+1\text{h} + 15\text{m}$), **an alert is raised when the second anomalous hour has closed** and its telemetry has been ingested.
 - **Single Event Span**: One alert event record spans the entire anomalous episode from the first anomalous hour to the last.
-- **Detection Delay**: Defined as the time elapsed between the start of the first anomalous hour and the alert trigger hour (the 2nd consecutive anomalous hour; nominally 1.0 hour).
+- **Detection Delay**: Defined as the time elapsed between the start of the first anomalous hour and the hour when the alert is triggered (nominally 1.0 hour elapsed between hourly starts).
 - **Suppression Conditions**:
   - Nighttime hours ($\text{solar\_elevation\_deg} \le 0^\circ$).
   - Missing target measurements (`target_kwh` is NaN).
@@ -53,6 +57,9 @@ Bounds are set to the 1st percentile (`bound_low`) and 99th percentile (`bound_h
 The evaluation protocol explicitly separates synthetic fault injections from natural historical cases:
 
 ### A. Synthetic Fault Injections (Final Test Partition Copy, Seed 42)
+> [!NOTE]
+> All injected-fault numbers and benchmark metrics in this subsection are **synthetic**: artificially simulated fault patterns (zero output, bad values, power drops) evaluated on a working copy of the held-out final test partition to measure detector sensitivity and latency. They do not represent physical hardware breakdowns on the operational plant.
+
 20 non-overlapping episodes per fault category, spaced $\ge 12$ hours apart, injected on VALID daylight stretches with weather:
 
 | Injection Type | Duration | Episodes Injected | Episodes Detected | Detection Rate (%) | Median Delay (h) | Max Delay (h) | Notes |
