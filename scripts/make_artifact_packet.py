@@ -15,6 +15,7 @@ import logging
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -703,6 +704,53 @@ def build_and_write_manifest(
     print_lineage_audit_table(mlflow_audit)
 
 
+def create_zip_archive(packet_dir: Path, zip_path: Path) -> tuple[int, str]:
+    """Create a zip archive of the packet folder and report facts."""
+    logger.info("Creating ZIP archive %s from %s ...", zip_path, packet_dir)
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in sorted(packet_dir.rglob("*")):
+            if p.is_file():
+                arcname = p.relative_to(packet_dir).as_posix()
+                zf.write(p, arcname)
+
+    # Compute SHA-256 of zip
+    zip_sha = sha256_of_file(zip_path)
+    zip_bytes = zip_path.stat().st_size
+    zip_mb = zip_bytes / (1024 * 1024)
+
+    total_uncompressed = 0
+    file_count = 0
+    print("\n" + "=" * 80)
+    print(f"SOLARCAST ARTIFACT PACKET ZIP ARCHIVE: {zip_path}")
+    print("=" * 80)
+    print(f"Archive Size:    {zip_bytes:,} bytes ({zip_mb:.2f} MB)")
+    print(f"Archive SHA-256: {zip_sha}")
+    print("=" * 80)
+
+    print("\nFiles in ZIP archive:")
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for info in zf.infolist():
+            file_count += 1
+            total_uncompressed += info.file_size
+            print(
+                f"  {info.filename:<55} {info.file_size:>10,d} bytes "
+                f"(deflated: {info.compress_size:>10,d})"
+            )
+
+    print("-" * 80)
+    print(f"Total files in archive:       {file_count}")
+    print(
+        f"Total uncompressed size:      {total_uncompressed:,} bytes "
+        f"({total_uncompressed / (1024 * 1024):.2f} MB)"
+    )
+    print(f"Compressed archive size:      {zip_bytes:,} bytes ({zip_mb:.2f} MB)")
+    ratio = (1 - zip_bytes / total_uncompressed) * 100
+    print(f"Compression ratio:            {ratio:.2f}% reduction")
+    print("=" * 80)
+
+    return zip_bytes, zip_sha
+
+
 def main() -> None:
     """Main CLI entrypoint for packet generation."""
     parser = argparse.ArgumentParser(description="Create SolarCast artifact packet for Member 2")
@@ -717,6 +765,11 @@ def main() -> None:
         type=Path,
         default=Path(__file__).resolve().parents[1],
         help="SolarCast repository root directory",
+    )
+    parser.add_argument(
+        "--zip",
+        action="store_true",
+        help="Also package packet folder into <out>.zip archive",
     )
     args = parser.parse_args()
 
@@ -761,6 +814,11 @@ def main() -> None:
     logger.info("Generating CHECKSUMS.sha256 and PACKET_MANIFEST.json (Step 2)...")
     build_and_write_manifest(repo_dir, out_dir, included_files)
     logger.info("Step 2 complete!")
+
+    if args.zip:
+        zip_path = out_dir.with_suffix(".zip")
+        create_zip_archive(out_dir, zip_path)
+        logger.info("Step 4 complete: Zip archive created at %s", zip_path)
 
 
 if __name__ == "__main__":
