@@ -1,0 +1,350 @@
+{
+  "verified_at_utc": "2026-11-26T16:07:33.282520+00:00",
+  "archive": "SolarCast_packet.zip",
+  "archive_sha256": "c7304fc10e0043c7a786da9e89e8d6245772f97d400aa17f5223346b2a576e48",
+  "packet_source_commit": "177c655522af91a0d17ee086e5eeae9b61d60817",
+  "packet_source_branch": "m1/packet",
+  "verified_payload_files": 31,
+  "verified_payload_bytes": 28116883,
+  "installed_artifacts": [
+    {
+      "path": "data/processed/feast/features_set_b.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/hourly.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/hrrr_coverage_scan.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/hrrr_forecast_features.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/quarantine.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/quarter_hourly.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/processed/validation_residuals.parquet",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/2107_meter_15m_data.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/manifest.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/metadata/2105_system_metadata.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/metadata/2107_system_metadata.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/metadata/9068_system_metadata.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/2105_environment_1_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/2105_inv01_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/2107_electrical_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/2107_environment_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/2107_irradiance_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/9068_ac_power_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/9068_environment_data.csv.head.csv",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/samples/nasa_power_2107_sample.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2017.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2018.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2019.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2020.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2021.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2022.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2023.json",
+      "already_present": false,
+      "verified": true
+    },
+    {
+      "path": "models/solarcast_f1_bundle.joblib",
+      "already_present": false,
+      "verified": true
+    }
+  ],
+  "existing_repository_comparisons": [
+    {
+      "path": "configs/data_manifest.json",
+      "exists_in_repository": true,
+      "matches_packet": true,
+      "repository_file_overwritten": false
+    },
+    {
+      "path": "reports/evaluation.json",
+      "exists_in_repository": true,
+      "matches_packet": true,
+      "repository_file_overwritten": false
+    },
+    {
+      "path": "reports/final_test_audit.json",
+      "exists_in_repository": true,
+      "matches_packet": true,
+      "repository_file_overwritten": false
+    }
+  ],
+  "verified_files": [
+    {
+      "path": "configs/data_manifest.json",
+      "bytes": 6950,
+      "sha256": "ba950b3bfed32846c5c1815edfdde7184df88184b883551a3ba5325dce164847"
+    },
+    {
+      "path": "data/processed/feast/features_set_b.parquet",
+      "bytes": 2839440,
+      "sha256": "07fbb11feca94c4b9aba5c5aa21f1f8af922cf3333fbfffb7f9680abf1c8d8f6"
+    },
+    {
+      "path": "data/processed/hourly.parquet",
+      "bytes": 1816935,
+      "sha256": "f9157a5dd5c4378823880c43da6e586c046d09debab99d99be20cf9041105cb6"
+    },
+    {
+      "path": "data/processed/hrrr_coverage_scan.parquet",
+      "bytes": 434385,
+      "sha256": "a0c10ffc703a94b17bbd1dc8f46844255c223d94ac9d1486359327fb8ccbc68e"
+    },
+    {
+      "path": "data/processed/hrrr_forecast_features.parquet",
+      "bytes": 904412,
+      "sha256": "fbc02d8bbbbdb9de818fbdd607cf9e54d7c7177e69d4ebb6d04a91e66360024f"
+    },
+    {
+      "path": "data/processed/quarantine.parquet",
+      "bytes": 2577,
+      "sha256": "2defa868865bdccae0ecf6fa309475b0f7c977d0b5e9c8d58ffe68124e9dbb51"
+    },
+    {
+      "path": "data/processed/quarter_hourly.parquet",
+      "bytes": 6519094,
+      "sha256": "7c488a111f2eb7b5502f33d3c377bd5f4414b9e06753171efac7771f8c6cb57a"
+    },
+    {
+      "path": "data/processed/validation_residuals.parquet",
+      "bytes": 1009993,
+      "sha256": "b5a0d1dab5b4a4c9d88f5fce0695d3695cb2184ad7aa57587c711d3bb02a9b9d"
+    },
+    {
+      "path": "data/raw/2107_meter_15m_data.csv",
+      "bytes": 6319525,
+      "sha256": "7f6c7cf80aae5dd8dd3687a7df95e35d03ffdc5bc0848256a1d76147bce9eb47"
+    },
+    {
+      "path": "data/raw/manifest.json",
+      "bytes": 6950,
+      "sha256": "ba950b3bfed32846c5c1815edfdde7184df88184b883551a3ba5325dce164847"
+    },
+    {
+      "path": "data/raw/metadata/2105_system_metadata.json",
+      "bytes": 29936,
+      "sha256": "ce02c2973a57531c66fb72a8bdc83cfaabcfca8b301369b75fad5d9df07f3d9f"
+    },
+    {
+      "path": "data/raw/metadata/2107_system_metadata.json",
+      "bytes": 64652,
+      "sha256": "17e4f7f448fcb2bec43f7610b40c1f7f4fc794ccc185e41dcde0514afba73ae5"
+    },
+    {
+      "path": "data/raw/metadata/9068_system_metadata.json",
+      "bytes": 186092,
+      "sha256": "6861ae58145427dd790315257feef95b6ed5067fe5b5378dc5b2fa4acc23937f"
+    },
+    {
+      "path": "data/raw/samples/2105_environment_1_data.csv.head.csv",
+      "bytes": 53333,
+      "sha256": "68a81400eed582b91a0e1111f64264a081551b608a65a928c11b09ba6fdd81ce"
+    },
+    {
+      "path": "data/raw/samples/2105_inv01_data.csv.head.csv",
+      "bytes": 52237,
+      "sha256": "17808f352029ccba68417d803efe991e435341fd592c33081e3389cb0cfc382c"
+    },
+    {
+      "path": "data/raw/samples/2107_electrical_data.csv.head.csv",
+      "bytes": 51295,
+      "sha256": "469a5c9e466215c7fd6d7225a0aa2ae8c9d48feb30650882a8e71d7984189887"
+    },
+    {
+      "path": "data/raw/samples/2107_environment_data.csv.head.csv",
+      "bytes": 52618,
+      "sha256": "1d8a8c2a38ab0f436b4c65caf0acebf936605792151d74eee452d8999e80eacf"
+    },
+    {
+      "path": "data/raw/samples/2107_irradiance_data.csv.head.csv",
+      "bytes": 53172,
+      "sha256": "cdbf57523e0c6e89f088b1937ba7051a40b9489ea52d85ca7316b14f130cab55"
+    },
+    {
+      "path": "data/raw/samples/9068_ac_power_data.csv.head.csv",
+      "bytes": 51767,
+      "sha256": "7762feec288e06ea4343136801c30f27849607e05cc5db3ad3dacb75145b2097"
+    },
+    {
+      "path": "data/raw/samples/9068_environment_data.csv.head.csv",
+      "bytes": 51429,
+      "sha256": "68d9811d4da1fb45a7a8e7c29edfc6912f9fa1f7579cea1dba869f4b52a31fd2"
+    },
+    {
+      "path": "data/raw/samples/nasa_power_2107_sample.json",
+      "bytes": 15220,
+      "sha256": "2c13091f01fd328ec7a3824e41f204f68cb02d47607b0af774a00a18bebcbd5c"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2017.json",
+      "bytes": 1032811,
+      "sha256": "3965ae165ce6ef88e4a2922791a748df19aa466e22f6e102ecb94575c66481d0"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2018.json",
+      "bytes": 1032624,
+      "sha256": "782e50f9069e9af0a4598828f91a52565361c08552902a9b23469b28a9912628"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2019.json",
+      "bytes": 1032660,
+      "sha256": "b9d9996a25797f0b37f8055ce352b63397995cf3ed0657611cfdaaf4539e6cc3"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2020.json",
+      "bytes": 1035552,
+      "sha256": "37ff0394b3d8293853a9d2d5d05e6a7b31a1adfb37c28a630bbfe82ed9ab1c46"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2021.json",
+      "bytes": 1032388,
+      "sha256": "9c2a7e6163cbfda0b1b7957badfec3cb7665f2c9bd423f935ab88e085ce46398"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2022.json",
+      "bytes": 1032509,
+      "sha256": "03daedaacd7f09e0cf85379ded642ab92370237c8ea898b0fe363c30e957d50d"
+    },
+    {
+      "path": "data/raw/weather/nasa_power_2023.json",
+      "bytes": 886189,
+      "sha256": "f3705c931c03b8d1d9a6ff68c7676da5e7f685f96029a41dbcb0608dafaba866"
+    },
+    {
+      "path": "models/solarcast_f1_bundle.joblib",
+      "bytes": 507490,
+      "sha256": "f72de152727fd406ac35a08cfa83289b6a61b031e0b3f4eb52008288e3980619"
+    },
+    {
+      "path": "reports/evaluation.json",
+      "bytes": 2212,
+      "sha256": "b4c3d35d14e2a76ab9397c53fa4167f39f9f4d6180b2339409ae3ac7af964616"
+    },
+    {
+      "path": "reports/final_test_audit.json",
+      "bytes": 436,
+      "sha256": "d59e9a1b2eec50039371aa552fff4920c842f4f816a20a8adb4d3b8c15016b3f"
+    }
+  ],
+  "mlflow_shared_server_configured": false,
+  "champion_mlflow_run_id": "f7fef3f7bdf241c5a53dc50d8e4713f9",
+  "reported_registry_version": 4,
+  "note": "Integrity verified against sender-supplied checksums, not an independent upstream authenticity check. No training, final-test evaluation or bug fixes performed.",
+  "verification_runtime": "Python 3.12.5 temporary review environment",
+  "existing_core_suite": {
+    "passed": 64,
+    "skipped": 2,
+    "warnings": 17,
+    "exit_code": 0,
+    "log": "tmp/packet_pytest_20261126.txt"
+  },
+  "bundle_checks": {
+    "model_name": "solarcast-f1",
+    "feature_set": "B",
+    "feature_count": 29,
+    "feature_schema_version": "1.1.0",
+    "mlflow_run_id": "f7fef3f7bdf241c5a53dc50d8e4713f9",
+    "hourly_hash_matches": true,
+    "quarter_hourly_hash_matches": true,
+    "hrrr_hash_matches": true
+  }
+}

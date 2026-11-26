@@ -3,6 +3,9 @@
 tmp/
 __pycache__/
 
+# Supplied binary artifact packet; payloads are managed separately from Git
+/SolarCast_packet.zip
+
 # Never commit local secrets
 .env
 .env.*
