@@ -1,7 +1,14 @@
 # SolarCast Production Deviation Detection & Alerting Engine
 
 ## 1. Overview & Purpose
-The SolarCast Production Deviation Detector (Task M1.6) monitors real-time solar generation anomalies by comparing measured plant output (`actual_kwh`) against advance hourly forecasts (`forecast_kwh`) produced by the champion forecasting pipeline (`models/solarcast_f1_bundle.joblib`, Feature Set B).
+The SolarCast Production Deviation Detector compares measured hourly production with stored F1 forecasts.
+The current project demonstrates historical replay. `DeviationDetector.process()` also supports ordered
+incremental batches; a deployed live monitor, durable state and delivery system are not implemented here.
+
+**26 November 2026 correction:** Earlier code counted nonadjacent or duplicate rows as consecutive.
+The corrected implementation requires exactly one hour between eligible target intervals. All duplicate
+target times within a batch are suppressed, and a gap resets pending persistence. The historical empirical
+numbers below have not been rerun with this fix and do not establish the corrected detector's performance.
 
 Operational timing conventions:
 - **Issue Time ($H$ UTC)**: Start of the target hourly interval $[H, H+1\text{h})$ UTC.
@@ -39,20 +46,64 @@ Bounds are set to the 1st percentile (`bound_low`) and 99th percentile (`bound_h
 ## 3. Alerting Rule & State Machine
 - **2-Hour Consecutive Breach Rule**: An alert event triggers only after **2 consecutive hourly intervals** outside calibrated bounds in the **same direction** (`consecutive_hours >= 2`).
 - **Alert Trigger Timing**: Because hourly production energy over $[H, H+1\text{h})$ is integrated only after the hour has ended (with telemetry available at $H+1\text{h} + 15\text{m}$), **an alert is raised when the second anomalous hour has closed** and its telemetry has been ingested.
-- **Single Event Span**: One alert event record spans the entire anomalous episode from the first anomalous hour to the last.
-- **Detection Delay**: Defined as the time elapsed between the start of the first anomalous hour and the hour when the alert is triggered (nominally 1.0 hour elapsed between hourly starts).
+- **Incremental emission**: Keep one `DeviationDetector` instance per site/model/calibration context.
+  `process(frame)` returns a new event at the second adjacent same-direction breach. Further hours of the
+  same episode do not emit again. Returned snapshots are not mutated as the episode continues.
+- **Batch compatibility**: `detect_deviations(frame)` returns retrospective full-episode summaries;
+  each independent call starts fresh. `detector.summaries()` exposes summaries across incremental calls.
+  Do not use independent batch-wrapper calls as a stateful live monitor.
+- **Detection timing**: `confirmation_issue_time_utc` is the second target's issue time;
+  `target_interval_start_utc` and `target_interval_end_utc` identify that confirming interval.
+  Supply each row's real `actual_available_at_utc` to establish `triggered_at_utc` (the later availability
+  of the first two labels). `detection_delay_hours` is that trigger minus the first anomalous target start.
+  For 16:00 and 17:00 breaches with actuals available at 17:15 and 18:15, confirmation is at 18:15 and
+  delay is 2.25 hours. The 1-hour difference between target starts is not operational detection latency.
+  Without both availability timestamps, trigger time and delay are null; no SLA-based arrival is invented.
+  `created_at_utc` is event-record creation time, distinct from historical label availability.
+- **Window semantics**: Existing `window_start_utc`/`window_end_utc` remain first/last anomalous target
+  interval STARTS for compatibility. The latter is neither an interval end nor a label arrival timestamp.
+- **Identity**: `event_id` is a deterministic hash of site, model/version, episode start/direction and
+  frozen bounds. It is independent of batch position and record creation time. Delivery consumers deduplicate
+  on that ID. An intentionally truncated replay may lack the true episode start and cannot reproduce its ID.
 - **Suppression Conditions**:
   - Nighttime hours ($\text{solar\_elevation\_deg} \le 0^\circ$).
   - Missing target measurements (`target_kwh` is NaN).
   - Missing model forecast.
+  - Nonfinite numeric measurements, unknown daylight eligibility, duplicated or off-hour target timestamps.
   - Quality flags other than `VALID` (e.g., `MISSING_DATA`, `INCOMPLETE`, `SUSPECT_ZERO` during standard operation).
 - **Reset Conditions**:
   - A suppressed hour (night or invalid).
   - A residual returning within normal bounds ($P_1 \le \text{res} \le P_{99}$).
   - A direction flip (e.g., negative breach immediately followed by positive breach).
-- **Standardized Schema**: Alert records are emitted conforming to [configs/alert_event_schema.json](file:///c:/projects/SolarCast/configs/alert_event_schema.json).
+  - A time gap of any length other than exactly one hour.
+- **Batch ordering**: Inputs are normalized from explicit timezone-aware timestamps to UTC and sorted.
+  Across `process()` calls, all new timestamps must be later than the last processed timestamp; overlapping
+  or late batches reject before changing state. The service must buffer late labels and reconcile duplicates
+  before committing a batch. It must persist/recover state or replay complete episodes after restart;
+  this in-memory class does not provide durable checkpoints, corrections or exactly-once delivery.
+- **Standardized Schema**: [configs/alert_event_schema.json](../configs/alert_event_schema.json) includes
+  optional timing fields, including nullable availability/latency, alongside the existing alert fields.
+
+```python
+from src.models.deviation import DeviationDetector
+
+detector = DeviationDetector()  # frozen configs/deviation.yaml, default site/model version
+# first_batch and next_batch are already joined stored-forecast/actual rows in UTC.
+new_events = detector.process(first_batch)
+new_events += detector.process(next_batch)  # same instance, strictly later target hours
+```
+
+Core regression check (no calibration, test-period loading or benchmark invocation):
+
+```powershell
+.\tmp\review_env\Scripts\python -m pytest tests/test_deviation.py tests/test_deviation_continuity.py -q
+```
 
 ## 4. Empirical Evaluation Results
+
+Historical Member 1 results, preserved unchanged. These used the earlier row-based continuity logic and
+target-start delay convention. Corrected rates/latencies are unmeasured; do not reopen the final test to
+refresh them in automated runs. Use the synthetic regression tests to verify the code fix.
 
 The evaluation protocol explicitly separates synthetic fault injections from natural historical cases:
 

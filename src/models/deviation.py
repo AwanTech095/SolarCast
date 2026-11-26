@@ -8,7 +8,9 @@ Strictly calibrated on out-of-sample validation folds with frozen thresholds.
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -289,6 +291,178 @@ def load_deviation_config(config_path: Path | str = DEFAULT_DEVIATION_CONFIG) ->
         return yaml.safe_load(f)
 
 
+def _alert_timestamp(value: Any) -> pd.Timestamp:
+    """Require an explicit timezone and normalize alert identities to UTC."""
+    timestamp = pd.Timestamp(value)
+    if pd.isna(timestamp) or timestamp.tzinfo is None:
+        raise ValueError("Alert timestamps require an explicit timezone/UTC offset")
+    return timestamp.tz_convert("UTC")
+
+
+class DeviationDetector:
+    """Incremental two-hour breach detector for one site and frozen model version.
+
+    Keep one instance across chronologically ordered, nonoverlapping batches. Each
+    process call emits immutable snapshots only when the second eligible adjacent
+    label confirms an episode. summaries() provides the retrospective full episodes.
+    State is in memory; durable checkpoints, late-label buffering and delivery
+    deduplication are responsibilities of the future monitoring service.
+    """
+
+    def __init__(
+        self, deviation_config: dict[str, Any] | None = None,
+        site_id: str = "2107", model_name: str = "solarcast-f1", model_version: str = "v4",
+    ) -> None:
+        """Bind detector state to calibrated bounds and one immutable model context."""
+        config = load_deviation_config() if deviation_config is None else deviation_config
+        self.bounds = copy.deepcopy(config["bounds"])
+        self.schema_version = config.get("schema_version", "1.0.0")
+        if config.get("rule_parameters", {}).get("consecutive_hours_threshold", 2) != 2:
+            raise ValueError("This detector requires the frozen two-hour confirmation rule")
+        for bound in self.bounds.values():
+            low, high = bound["bound_low"], bound["bound_high"]
+            if not np.isfinite([low, high]).all() or low >= high:
+                raise ValueError("Deviation bounds must be finite and increasing")
+        self.site_id = str(site_id)
+        self.model_name = model_name
+        self.model_version = model_version
+        self._last_timestamp: pd.Timestamp | None = None
+        self._active: dict[str, Any] | None = None
+        self._episodes: list[dict[str, Any]] = []
+
+    def process(self, frame: pd.DataFrame) -> list[dict[str, Any]]:
+        """Process a batch and emit new confirmations, without waiting for episode closure.
+
+        Duplicate target times within a batch suppress that whole hour. Overlaps
+        with earlier calls reject before changing state; buffer/deduplicate upstream.
+        Optional actual_available_at_utc establishes label-based trigger timing.
+        Without it, timing fields are null rather than guessed from a reporting SLA.
+        """
+        if frame.empty:
+            return []
+        df = frame.copy()
+        df["timestamp"] = pd.DatetimeIndex([_alert_timestamp(t) for t in df["timestamp"]])
+        df = df.sort_values("timestamp", kind="stable").reset_index(drop=True)
+        if self._last_timestamp is not None and df["timestamp"].min() <= self._last_timestamp:
+            raise ValueError("Batch overlaps already processed hours; supply ordered new intervals")
+        if "site_id" in df and not df["site_id"].astype(str).eq(self.site_id).all():
+            raise ValueError("Detector cannot combine labels from different sites")
+        # Preflight all timing fields before mutating state.
+        if "issue_time_utc" in df:
+            issues = pd.DatetimeIndex([_alert_timestamp(t) for t in df["issue_time_utc"]])
+            if not (issues == pd.DatetimeIndex(df["timestamp"])).all():
+                raise ValueError("Stored F1 issue times must match target interval starts")
+        if "actual_available_at_utc" in df:
+            available = [
+                None if pd.isna(t) else _alert_timestamp(t)
+                for t in df["actual_available_at_utc"]
+            ]
+            if any(t is not None and t < h + pd.Timedelta(hours=1)
+                   for t, h in zip(available, df["timestamp"], strict=True)):
+                raise ValueError("An hourly label cannot arrive before its target interval ends")
+            df["actual_available_at_utc"] = available
+        ambiguous = df["timestamp"].duplicated(keep=False)
+        off_grid = df["timestamp"] != df["timestamp"].dt.floor("h")
+        emitted = []
+        for index, row in df.iterrows():
+            timestamp = row["timestamp"]
+            if (self._last_timestamp is not None
+                    and timestamp - self._last_timestamp != pd.Timedelta(hours=1)):
+                self._active = None
+            self._last_timestamp = timestamp
+            actual, forecast = row.get("actual", np.nan), row.get("forecast", np.nan)
+            elevation = row.get("solar_elevation_deg", 10.0)
+            daylight = row.get("is_daylight", True)
+            valid_numbers = all(
+                isinstance(value, int | float | np.number) and np.isfinite(value)
+                for value in (actual, forecast, elevation)
+            )
+            suppressed = (
+                ambiguous.iloc[index] or off_grid.iloc[index] or not valid_numbers
+                or not isinstance(daylight, bool | np.bool_) or not bool(daylight) or elevation <= 0
+                or str(row.get("quality_flag", "VALID")) != "VALID"
+            )
+            if suppressed:
+                self._active = None
+                continue
+            residual = float(actual - forecast)
+            if not np.isfinite(residual):
+                self._active = None
+                continue
+            cloud_bin = row.get("forecast_cloud_bin")
+            if cloud_bin is None or pd.isna(cloud_bin) or not cloud_bin:
+                cloud_bin = assign_operating_cloud_bin(
+                    row.get("tcdc_pct"), row.get("weather_missing")
+                )
+            if cloud_bin not in self.bounds:
+                cloud_bin = "no_weather"
+            low, high = self.bounds[cloud_bin]["bound_low"], self.bounds[cloud_bin]["bound_high"]
+            direction = "negative" if residual < low else "positive" if residual > high else None
+            if direction is None:
+                self._active = None
+                continue
+            available_at = row.get("actual_available_at_utc")
+            available_at = None if pd.isna(available_at) else available_at
+            if self._active is None or direction != self._active["direction"]:
+                self._active = {
+                    "start": timestamp, "direction": direction, "bin": cloud_bin,
+                    "count": 1, "residual_sum": residual, "available": available_at,
+                    "event": None,
+                }
+                continue
+            active = self._active
+            active["count"] += 1
+            active["residual_sum"] += residual
+            if active["event"] is None:
+                start = active["start"]
+                identity = json.dumps([
+                    self.site_id, self.model_name, self.model_version, start.isoformat(), direction,
+                    self.bounds,
+                ], sort_keys=True, allow_nan=False)
+                trigger = (
+                    max(active["available"], available_at)
+                    if active["available"] is not None and available_at is not None else None
+                )
+                active["event"] = {
+                    "schema_version": self.schema_version,
+                    "event_id": "DEV-" + hashlib.sha256(identity.encode()).hexdigest()[:24],
+                    "site_id": self.site_id, "alert_type": "residual_deviation",
+                    "model_name": self.model_name, "model_version": self.model_version,
+                    "window_start_utc": start.isoformat(), "direction": direction,
+                    "bin": active["bin"],
+                    "bound_low": self.bounds[active["bin"]]["bound_low"],
+                    "bound_high": self.bounds[active["bin"]]["bound_high"],
+                    "confirmation_issue_time_utc": timestamp.isoformat(),
+                    "target_interval_start_utc": timestamp.isoformat(),
+                    "target_interval_end_utc": (timestamp + pd.Timedelta(hours=1)).isoformat(),
+                    "actual_available_at_utc": (
+                        available_at.isoformat() if available_at is not None else None
+                    ),
+                    "triggered_at_utc": trigger.isoformat() if trigger is not None else None,
+                    "detection_delay_hours": (
+                        float((trigger - start) / pd.Timedelta(hours=1))
+                        if trigger is not None else None
+                    ),
+                    "created_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+                }
+                self._episodes.append(active["event"])
+            event = active["event"]
+            event.update({
+                # Legacy window_end is the last target START, not its end/label arrival.
+                "window_end_utc": timestamp.isoformat(), "consecutive_hours": active["count"],
+                "mean_residual_kwh": round(active["residual_sum"] / active["count"], 2),
+                "reason": f"{active['count']} consecutive hourly {direction} breaches; "
+                          "confirmed at the second eligible label",
+            })
+            if active["count"] == 2:
+                emitted.append(copy.deepcopy(event))
+        return emitted
+
+    def summaries(self) -> list[dict[str, Any]]:
+        """Return retrospective episode summaries without mutating emitted events."""
+        return copy.deepcopy(self._episodes)
+
+
 def detect_deviations(
     frame: pd.DataFrame,
     deviation_config: dict[str, Any] | None = None,
@@ -296,149 +470,15 @@ def detect_deviations(
     model_name: str = "solarcast-f1",
     model_version: str = "v4",
 ) -> list[dict[str, Any]]:
-    """Detect production deviation episodes exceeding calibrated bounds for 2+ consecutive hours.
+    """Summarize contiguous breach episodes in one complete retrospective batch.
 
-    Alert rule:
-    - Flags after 2 consecutive hourly intervals outside bounds in the same direction.
-    - A night, missing target/forecast, or quality_flag other than VALID resets count.
-    - One alert event covers a whole episode.
-    - Detection delay = hours between the first anomalous hour and the alert hour (the 2nd hour).
-    - Conforms to configs/alert_event_schema.json.
-
-    Args:
-        frame: Chronological DataFrame containing timestamps, actuals, forecasts, and flags.
-        deviation_config: Calibrated bounds configuration dictionary.
-        site_id: PV site identifier.
-        model_name: Name of forecasting model.
-        model_version: Version/tag of model bundle.
-
-    Returns:
-        List of alert event records matching configs/alert_event_schema.json.
+    For incremental monitoring keep a DeviationDetector instance across calls and
+    use process() to emit at confirmation. Independent calls here reset all state.
+    Frozen thresholds and existing summary fields retain their meanings.
     """
-    if deviation_config is None:
-        deviation_config = load_deviation_config()
-
-    bounds = deviation_config["bounds"]
-    schema_ver = deviation_config.get("schema_version", "1.0.0")
-
-    df = frame.copy().sort_values("timestamp").reset_index(drop=True)
-    alert_events: list[dict[str, Any]] = []
-
-    # Active tracking state
-    consecutive_count = 0
-    active_direction: str | None = None
-    episode_hours: list[dict[str, Any]] = []
-    alert_triggered = False
-    event_counter = 1
-
-    def close_active_episode() -> None:
-        nonlocal consecutive_count, active_direction, episode_hours, alert_triggered, event_counter
-        if alert_triggered and len(episode_hours) >= 2:
-            start_ts = episode_hours[0]["timestamp"]
-            end_ts = episode_hours[-1]["timestamp"]
-            residuals = [h["residual"] for h in episode_hours]
-            mean_res = float(np.mean(residuals))
-            b_name = episode_hours[0]["bin"]
-            b_low = bounds[b_name]["bound_low"]
-            b_high = bounds[b_name]["bound_high"]
-
-            # Detection delay in hours: start hour to trigger hour (2nd anomalous hour)
-            trigger_ts = episode_hours[1]["timestamp"]
-            delay_h = (trigger_ts - start_ts).total_seconds() / 3600.0
-
-            dir_str = "underproduction" if active_direction == "negative" else "overproduction"
-            reason = (
-                f"{len(episode_hours)} consecutive hours of {dir_str} in '{b_name}' "
-                f"bin (mean residual: {mean_res:.1f} kWh, bounds: [{b_low}, {b_high}] kWh, "
-                f"detection delay: {delay_h:.1f}h)"
-            )
-
-            event = {
-                "schema_version": schema_ver,
-                "event_id": f"DEV-{start_ts.strftime('%Y%m%d%H%M')}-{event_counter:03d}",
-                "site_id": site_id,
-                "alert_type": "residual_deviation",
-                "model_name": model_name,
-                "model_version": model_version,
-                "window_start_utc": start_ts.isoformat(),
-                "window_end_utc": end_ts.isoformat(),
-                "direction": active_direction,
-                "bin": b_name,
-                "consecutive_hours": len(episode_hours),
-                "mean_residual_kwh": round(mean_res, 2),
-                "bound_low": b_low,
-                "bound_high": b_high,
-                "reason": reason,
-                "created_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
-            }
-            alert_events.append(event)
-            event_counter += 1
-
-        consecutive_count = 0
-        active_direction = None
-        episode_hours = []
-        alert_triggered = False
-
-    for _, row in df.iterrows():
-        ts = pd.to_datetime(row["timestamp"])
-        actual = row.get("actual", np.nan)
-        forecast = row.get("forecast", np.nan)
-        is_day = bool(row.get("is_daylight", True))
-        elev = row.get("solar_elevation_deg", 10.0)
-        q_flag = str(row.get("quality_flag", "VALID"))
-
-        # Check suppression: night, missing target, missing forecast, non-VALID quality flag
-        is_suppressed = (
-            (not is_day)
-            or (elev <= 0)
-            or (pd.isna(actual))
-            or (pd.isna(forecast))
-            or (q_flag != "VALID")
-        )
-
-        if is_suppressed:
-            close_active_episode()
-            continue
-
-        res = float(actual - forecast)
-        cloud_bin = str(
-            row.get("forecast_cloud_bin")
-            or assign_operating_cloud_bin(row.get("tcdc_pct"), row.get("weather_missing"))
-        )
-        if cloud_bin not in bounds:
-            cloud_bin = "no_weather"
-
-        b_low = bounds[cloud_bin]["bound_low"]
-        b_high = bounds[cloud_bin]["bound_high"]
-
-        # Check breach
-        if res < b_low:
-            curr_dir = "negative"
-        elif res > b_high:
-            curr_dir = "positive"
-        else:
-            curr_dir = None
-
-        if curr_dir is None:
-            # Residual within bounds
-            close_active_episode()
-        elif curr_dir == active_direction:
-            # Continuing breach in same direction
-            consecutive_count += 1
-            episode_hours.append({"timestamp": ts, "residual": res, "bin": cloud_bin})
-            if consecutive_count >= 2:
-                alert_triggered = True
-        else:
-            # New breach or direction flip
-            close_active_episode()
-            active_direction = curr_dir
-            consecutive_count = 1
-            episode_hours = [{"timestamp": ts, "residual": res, "bin": cloud_bin}]
-            alert_triggered = False
-
-    # Close any trailing episode at end of frame
-    close_active_episode()
-    return alert_events
+    detector = DeviationDetector(deviation_config, site_id, model_name, model_version)
+    detector.process(frame)
+    return detector.summaries()
 
 
 def get_test_period_dataset(

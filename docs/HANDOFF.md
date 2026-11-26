@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-26 (exact target-hour feature retrieval, step 4). Update this file after every task (see AGENTS.md).
+**Last updated:** 2026-11-26 (alert continuity and confirmation, step 5). Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -17,7 +17,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer, numerical gate, isolated exact-candidate checks and provider target-hour checks fixed. Alert/runbook fixes, future promotion integration and exact-environment/real Feast verification remain. See docs/member1_review_20261124.md. |
+| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer, numerical gate, exact-candidate checks, provider target-hour checks and alert continuity fixed. Remaining runbook/final-test automation safeguards, future promotion integration and exact-environment/real Feast verification remain. See docs/member1_review_20261124.md. |
+| M1.alert-continuity | Consecutive-hour alerts, incremental confirmation and timing (step 5) | Done (tests pass) | Gaps/duplicates/suppressed intervals reset persistence; incremental detector emits once at second adjacent breach, stable context-based IDs, explicit label timing or null. 22 new regressions; full suite 189 passed, 1 skipped, 1 deselected. Historical performance not recomputed; durable live service not implemented. |
 | M1.exact-feature-hour | Exact issue-hour identity in online/offline retrieval (step 4) | Done (tests pass) | All online feature timestamps must match requested time; offline checks exact registered-source keys and returned values. Missing night/hour rows reject, source time returned for audit. 23 new core tests; 167 passed, 1 skipped, 1 deselected overall. Real Feast integration not run. |
 | M1.candidate-artifacts | Isolate candidate outputs and evaluate saved weights (step 3) | Done (tests pass) | Unique candidate directories, SHA-256 manifest, reloaded-model development validation, rejected exit 2, no rejected registration or approved-file overwrite. 17 new regression cases; full non-network suite 144 passed, 1 skipped, 1 deselected. No real-data retraining or deployment. |
 | M1.packet | Receive and verify artifact packet (step 1) | Done (tests pass) | SolarCast_packet.zip: 31 payload hashes/sizes verified; 28 missing data/model files installed; three existing config/report copies match. Bundle data hashes and MLflow run ID checked; 64 tests passed, 2 skipped under the existing Python 3.12 review runtime. Separate Feast/Python 3.11 and bug fixes remain. Receipt: reports/packet_receipt_20261126.json. |
@@ -119,6 +120,50 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Alert continuity (26 November 2026, step 5 only)
+
+Branch: `m1/alert-continuity`, review R4. Initial regression suite: **17 failed, 1 passed** against the
+old detector. It incorrectly treated 16:00 and 19:00, or repeated 16:00 rows, as consecutive breaches.
+The fix requires exactly one hour between eligible hourly target intervals in the same direction.
+Gaps, all copies of duplicated within-batch hours, off-hour timestamps, night/invalid/missing/nonfinite
+measurements and direction changes reset pending persistence. Frozen calibrated bounds are unchanged.
+
+`detect_deviations(frame)` remains the complete-batch retrospective summary API. For incremental use,
+keep one `DeviationDetector(config, site_id, model_name, model_version)` instance and call `process(frame)`
+on strictly later, nonoverlapping batches. It emits one independent snapshot when the second adjacent
+breach confirms an episode, without waiting for closure. Further breaches extend `summaries()` but do not
+emit again. Overlapping/late batches reject before modifying state. State is in memory, not a deployed
+live monitor: late-label buffering, durable recovery and delivery deduplication remain service work.
+
+Episode IDs hash site/model/version, start/direction and frozen bounds, independent of prior unrelated
+episodes or wall-clock record creation. A truncated replay without the original episode start cannot
+reconstruct that episode's ID. Consumers must preserve complete episode context when replaying.
+
+Optional timing fields were added to `configs/alert_event_schema.json` without changing existing required
+fields. `confirmation_issue_time_utc` and target interval start/end identify the second breach. Real
+`actual_available_at_utc` inputs establish `triggered_at_utc` (when both initial labels have arrived) and
+`detection_delay_hours` (from first anomalous target start). Without both timestamps, trigger/delay is null.
+The old 1-hour difference between target starts is not actual label-based latency. `created_at_utc` is
+record creation time, while legacy window endpoints remain anomalous target STARTS. See updated
+`docs/deviation_detector.md` and `docs/handoff_member3.md` for state and payload contracts.
+
+```powershell
+$env:PYTHONPATH=''
+.\tmp\review_env\Scripts\python -m pytest tests/test_deviation.py tests/test_deviation_continuity.py -q
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q --tb=short
+.\tmp\review_env\Scripts\python -m ruff check . --exclude tools
+```
+
+Verification: **30 focused tests passed**; full suite **189 passed, 1 skipped (Feast), 1 deselected
+(network)**; scoped Ruff clean. New events were validated against the full shared JSON schema, including
+nullable timing. Logs: `tmp/alert_continuity_before.txt`, `tmp/alert_continuity_after.txt`,
+`tmp/alert_continuity_full_suite.txt`. Runtime remains Python 3.12.5; clean 3.11 and real Feast not verified.
+No dependency installation, threshold recalibration, final-test benchmark, production retraining or push.
+Existing model/data/reports are unchanged. Historical alert rates and delays were not rerun and must not
+be presented as validation of the corrected detector. By eye, confirm that 16:00/19:00 cannot alert and
+that second-hour target start, label arrival and event creation are distinct timestamps.
+Next step: R5 runbook commands and protection against automated final-test reuse. Stop here until asked.
 
 ### Exact feature hour (26 November 2026, step 4 only)
 
@@ -449,6 +494,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| 2026-11-26 | Require true hourly adjacency; add incremental detector without changing retrospective wrapper | Gaps/duplicates cannot confirm persistence. Keep per-site/model in-memory state across ordered batches; emit once at second breach, use stable IDs, and report unknown arrival timing as null. Frozen bounds and historical results preserved; durable monitoring remains future work. |
 | 2026-11-26 | Require exact feature issue time in both retrieval paths; verify existing registered Parquet source without schema changes | Target-specific vectors cannot be reused within a freshness window. Missing/ambiguous rows reject, source time is returned for audit, weather nulls are preserved. Real Feast integration and live process bridge remain unverified. |
 | 2026-11-26 | Isolate future candidates and bind eligibility to saved weights; no automatic promotion | Prevent rejected runs from overwriting approved artifacts. Frozen fits stop before last development fold with label-availability purge; exact bundle is reloaded and scored. Existing full-dev model and historical results remain unchanged. |
 |---|---|---|
@@ -484,6 +530,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 11. Changelog
 
+- 2026-11-26 (step 5): Fixed R4 continuity and confirmation on `m1/alert-continuity`. Added `DeviationDetector.process()` for state across ordered nonoverlapping batches, stable episode IDs and explicit/nullable label-based trigger timing; preserved `detect_deviations()` batch summaries. Added optional schema fields and 22 regressions. 30 focused tests passed; full non-network suite 189 passed, 1 skipped, 1 deselected; scoped Ruff clean. Updated monitoring handoff and marked historical rates/latencies as pre-fix evidence. No recalibration, final-test evaluation, retraining or push.
+
 - 2026-11-26 (step 4): Fixed R3 target-hour retrieval on `m1/exact-feature-hour`: exact timestamps for every online feature, exact site/hour source membership and returned-value checks offline, explicit source timestamp output, timezone/policy validation, and no substitution for missing night rows. Added 23 deterministic contract tests; full non-network suite 167 passed, 1 skipped, 1 deselected; scoped Ruff passed. Updated feature-store and Member 3 environment/serving guidance. Artifacts preserved; no real Feast run, retraining, final-test access or push.
 
 - 2026-11-26 (step 3): Fixed R2 artifact overwrite/exact-candidate evaluation on `m1/candidate-artifacts`. Added unique manifest-bound candidate outputs, no-refit evaluator CLI, exit 2 for rejection, no rejected registration and propagated registration errors. 17 new tests; full non-network suite 144 passed, 1 skipped, 1 deselected; scoped Ruff passed. Protected historical model/reports retained; no real-data retraining, final-test benchmark or push. See section 6 for exact commands, fit-window change and verification limits.
@@ -516,10 +564,10 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 
 ## 12. Next steps
-0. Artifact handoff, numerical gate validation, isolated exact-candidate checks and provider target-hour
-   safeguards are complete; latest main
+0. Artifact handoff, numerical gate validation, isolated exact-candidate checks, provider target-hour
+   safeguards and alert continuity/confirmation are complete; latest main
    5ac8ed0 is integrated. Continue `docs/member1_review_20261124.md` priorities one at a time:
-   contiguous alert handling (R4), remaining automation commands, and real Feast/environment verification. Future
+   runbook/final-test automation safeguards (R5), remaining data-validation findings, and real Feast/environment verification. Future
    promotion must separately verify the exact eligible candidate and never refit under its approval. The existing
    Member 1 handoffs are implementation guidance, not independent proof of clean-clone readiness.
 1. **Member 2 Review & Integration:**

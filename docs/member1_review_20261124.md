@@ -2,6 +2,16 @@
 
 ## Decision
 
+**Update, 26 November 2026, step 5:** Fixed **R4** on `m1/alert-continuity`. True hourly adjacency is
+required; duplicate/ambiguous hours, gaps and invalid/suppressed observations break persistence.
+`DeviationDetector.process()` retains in-memory state across ordered nonoverlapping batches and emits
+once at the second confirming label. Existing batch API returns retrospective summaries. Deterministic
+context-based episode IDs and optional label-based trigger timing distinguish confirmation from target
+starts; absent arrival times stay null. Initial 18 regressions showed 17 failures; final 22 new cases and
+existing suite pass: **189 passed, 1 skipped, 1 deselected**, scoped Ruff clean. Shared schema and serving
+docs updated. No historical benchmark rerun or durable live service; old rates/delays remain pre-fix
+evidence. Next priority is R5 runbook flags and final-test protection in automation.
+
 **Update, 26 November 2026, step 4:** Fixed **R3** provider target-hour safeguards on
 `m1/exact-feature-hour`. Every online feature must match the requested UTC instant and site. Offline replay
 requires exact keys in the registered local Parquet source, checks returned values and exposes source time;

@@ -94,6 +94,30 @@
       "type": "number",
       "description": "Calibrated 99th percentile upper bound in kWh for the operating bin"
     },
+    "confirmation_issue_time_utc": {
+      "type": "string", "format": "date-time",
+      "description": "Issue time of the second contiguous breach; not the label arrival time"
+    },
+    "target_interval_start_utc": {
+      "type": "string", "format": "date-time",
+      "description": "Start of the confirming second breach target interval"
+    },
+    "target_interval_end_utc": {
+      "type": "string", "format": "date-time",
+      "description": "End of the confirming second breach target interval"
+    },
+    "actual_available_at_utc": {
+      "type": ["string", "null"], "format": "date-time",
+      "description": "Supplied availability of the second label; null when not recorded"
+    },
+    "triggered_at_utc": {
+      "type": ["string", "null"], "format": "date-time",
+      "description": "Earliest confirmation after both labels arrived; null if either availability is unknown"
+    },
+    "detection_delay_hours": {
+      "type": ["number", "null"], "minimum": 0,
+      "description": "Label-based trigger minus first anomalous target start; null without availability evidence"
+    },
     "drift_details": {
       "type": "object",
       "description": "Detailed payload for input_drift alert events",

@@ -298,17 +298,34 @@ To avoid cardinality explosion in Prometheus / Grafana, use fixed low-cardinalit
 
 When operational monitoring flags an anomalous event (residual deviation, input feature drift, performance degradation, or weather data quality degradation), an alert event conforming to `configs/alert_event_schema.json` (v1.1.0) is emitted:
 
+**26 November correction:** For residual alerts, keep a `DeviationDetector` instance across ordered,
+nonoverlapping batches and use `process()` to emit at the second adjacent hourly breach. Gaps, duplicate
+hours and suppressed rows break persistence. `detect_deviations()` remains a retrospective summary wrapper,
+not a cross-batch live API. The instance is in-memory; buffering late labels, durable state recovery and
+delivery deduplication remain monitoring-service work. Reject overlapping input batches and deduplicate
+deliveries using the stable episode ID, which now includes site/model/version/start/direction/bounds.
+
+The following is an illustrative payload shape; use generated IDs and real label availability in deployed
+records. `confirmation_issue_time_utc` is the second target START; `triggered_at_utc` is when both confirming
+labels have arrived. Unknown availability/latency is null, not an assumed 15-minute SLA. `created_at_utc`
+records event creation. Existing window endpoints refer to target STARTS; see `docs/deviation_detector.md`.
+
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schema_version": "1.1.0",
-  "event_id": "DEV-202306151600-001",
+  "event_id": "DEV-<generated-context-hash>",
   "site_id": "2107",
   "alert_type": "residual_deviation",
   "model_name": "solarcast-f1",
   "model_version": "v2",
   "window_start_utc": "2023-06-15T15:00:00+00:00",
   "window_end_utc": "2023-06-15T16:00:00+00:00",
+  "confirmation_issue_time_utc": "2023-06-15T16:00:00+00:00",
+  "target_interval_start_utc": "2023-06-15T16:00:00+00:00",
+  "target_interval_end_utc": "2023-06-15T17:00:00+00:00",
+  "actual_available_at_utc": "2023-06-15T17:15:00+00:00",
+  "triggered_at_utc": "2023-06-15T17:15:00+00:00",
+  "detection_delay_hours": 2.25,
   "direction": "negative",
   "bin": "clear",
   "consecutive_hours": 2,
