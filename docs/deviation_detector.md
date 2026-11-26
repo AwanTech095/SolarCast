@@ -145,8 +145,8 @@ For retrospective benchmarking, all 286 historical `SUSPECT_ZERO` hours across t
 
 ## 6. How to Run
 ```powershell
-# 1. Run deviation detector calibration, evaluation, and reporting
-.\.venv\Scripts\python -m src.models.deviation --log-mlflow
+# 1. Dev-only model-recipe calibration; see handoff_member2.md section 2.7 for bounded monitoring
+.\.venv\Scripts\python -m src.models.deviation --calibrate --bundle models/solarcast_f1_bundle.joblib --reports-dir reports/deviation_runs --log-mlflow
 
 # 2. Run deviation detector unit test suite
 .\.venv\Scripts\pytest tests/test_deviation.py -v
@@ -157,3 +157,17 @@ For retrospective benchmarking, all 286 historical `SUSPECT_ZERO` hours across t
 # 4. Check code style and formatting
 .\.venv\Scripts\ruff check .
 ```
+
+## 7. Safe workflow entrypoints (27 November 2026)
+
+Choose `--calibrate` or `--evaluate` explicitly. Calibration uses the supplied bundle's cloned estimator
+recipe on 3 expanding dev folds, with reporting-delay purging and source-time checks. It writes unique
+artifacts and binds threshold provenance to model/data/config hashes. It never replaces frozen historical
+thresholds. Bounded evaluation requires joined stored F1 forecasts/actuals, explicit UTC window and virtual
+clock, and matching model/site/calibration identity. It rejects the original protected final-test period
+and periods before model training labels were available. Unarrived labels stay unavailable.
+
+See `docs/handoff_member2.md` section 2.7 for complete commands and required log columns. Historical
+`get_test_period_dataset()` and `run_natural_suspect_zero_evaluation()` now fail before I/O: the latter's
+old all-years future-trained-model comparison is retired, not an out-of-sample forecast benchmark.
+No new corrected empirical scores are claimed. Existing packet thresholds/results remain historical.

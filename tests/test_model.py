@@ -186,11 +186,19 @@ def test_candidate_gate_logic():
     assert any("negative values" in r for r in gate_neg["failure_reasons"])
 
 
-def test_final_test_safeguard(tmp_path):
+def test_final_test_safeguard(tmp_path, monkeypatch):
     """Verify safeguard prevents reading or writing final test set without authorization."""
     marker_path = tmp_path / "final_test_safeguard.json"
-    # Without test file existing, check passes
-    check_final_test_safeguard(force=False, reason=None, log_path=marker_path)
+    for key in ("CI", "GITHUB_ACTIONS", "AIRFLOW_CTX_DAG_ID", "KFP_RUN_ID"):
+        monkeypatch.delenv(key, raising=False)
+    # First use also requires explicit authorization.
+    with pytest.raises(RuntimeError, match="force"):
+        check_final_test_safeguard(force=False, reason=None, log_path=marker_path)
+    with pytest.raises(ValueError, match="A meaningful reason"):
+        check_final_test_safeguard(force=True, reason="", log_path=marker_path)
+    check_final_test_safeguard(
+        force=True, reason="Authorized first evaluation", log_path=marker_path
+    )
 
     # Simulate final test results already written
     marker_path.write_text('{"final_test_opened": true}', encoding="utf-8")
@@ -199,16 +207,15 @@ def test_final_test_safeguard(tmp_path):
     with pytest.raises(RuntimeError, match="Final 20% test partition has already been opened"):
         check_final_test_safeguard(force=False, reason=None, log_path=marker_path)
 
-    # Attempting with force but no reason should raise ValueError
-    with pytest.raises(ValueError, match="A meaningful reason"):
+    # Force never bypasses existing audit evidence.
+    with pytest.raises(RuntimeError, match="already been opened"):
         check_final_test_safeguard(force=True, reason="", log_path=marker_path)
 
-    # With force and valid reason, check succeeds
-    check_final_test_safeguard(
-        force=True,
-        reason="Audited recalculation after authorized scope update",
-        log_path=marker_path,
-    )
+    with pytest.raises(RuntimeError, match="already been opened"):
+        check_final_test_safeguard(
+            force=True, reason="Audited recalculation after authorized scope update",
+            log_path=marker_path,
+        )
 
 
 def test_model_bundle_roundtrip(synthetic_feature_data, tmp_path):

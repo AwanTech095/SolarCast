@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-26 (alert continuity and confirmation, step 5). Update this file after every task (see AGENTS.md).
+**Last updated:** 2026-11-27 (evaluation/runbook safeguards, step 6). Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -17,7 +17,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer, numerical gate, exact-candidate checks, provider target-hour checks and alert continuity fixed. Remaining runbook/final-test automation safeguards, future promotion integration and exact-environment/real Feast verification remain. See docs/member1_review_20261124.md. |
+| M1.review | Independent Member 2 integration acceptance | In progress | R1-R5 code/entrypoint repairs implemented with tests. R6 raw-value quarantine, R7 latency/provenance evidence, remaining R8 assumptions and exact-environment/real Feast verification still require resolution. Future promotion/live services remain implementation work. See docs/member1_review_20261124.md. |
+| M1.evaluation-safeguards | Explicit calibration/monitoring modes, immutable final-test protection and corrected commands (step 6) | Done (tests pass) | Bare deviation CLI does no work. Model-bound dev-only purged OOF calibration and bounded stored-record monitoring write isolated outputs. Existing final audit cannot be forced or overwritten; repository-anchored guard runs before I/O. 26 new tests; 215 core tests passed, 1 skipped, 1 deselected. No real final-test evaluation or artifact replacement. |
 | M1.alert-continuity | Consecutive-hour alerts, incremental confirmation and timing (step 5) | Done (tests pass) | Gaps/duplicates/suppressed intervals reset persistence; incremental detector emits once at second adjacent breach, stable context-based IDs, explicit label timing or null. 22 new regressions; full suite 189 passed, 1 skipped, 1 deselected. Historical performance not recomputed; durable live service not implemented. |
 | M1.exact-feature-hour | Exact issue-hour identity in online/offline retrieval (step 4) | Done (tests pass) | All online feature timestamps must match requested time; offline checks exact registered-source keys and returned values. Missing night/hour rows reject, source time returned for audit. 23 new core tests; 167 passed, 1 skipped, 1 deselected overall. Real Feast integration not run. |
 | M1.candidate-artifacts | Isolate candidate outputs and evaluate saved weights (step 3) | Done (tests pass) | Unique candidate directories, SHA-256 manifest, reloaded-model development validation, rejected exit 2, no rejected registration or approved-file overwrite. 17 new regression cases; full non-network suite 144 passed, 1 skipped, 1 deselected. No real-data retraining or deployment. |
@@ -120,6 +121,67 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Evaluation/runbook safeguards (27 November 2026, step 6 only)
+
+Branch `m1/evaluation-safeguards`, review R5. Eight initial regression tests failed against the original
+entrypoints: bare deviation CLI performed implicit calibration/final evaluation, final-data helpers read
+without protection, and force/audit overwrite could replace one-time evidence. These paths are corrected:
+
+- Final evaluation checks authorization before configs/data/model I/O. Any existing audit (including a
+  partial/failed claim) blocks repeat evaluation, even with `--force --reason`. The default marker is
+  anchored to this repository, not the caller's working directory. First-ever use requires force/reason
+  outside known CI/scheduler contexts; exclusive audit creation is the atomic access claim. Failed runs
+  retain it. These are application guards, not a filesystem security boundary; never remove/change the audit.
+- The default deviation command now fails with usage error. `--calibrate` and `--evaluate` are mutually
+  exclusive and require an explicit model bundle. Irrelevant monitoring/window flags cannot be silently
+  ignored during calibration. `--reports-dir` and all current runbook flags are implemented.
+- Calibration clones the supplied estimator recipe across three development-only expanding folds, purges
+  unavailable training labels, and verifies site/hour uniqueness, model hourly-data lineage and feature
+  availability audits. No final targets enter fitting, residual calculation or thresholds. These are OOF
+  recipe forecasts, not predictions from different final saved weights. Configs record model/data/features/
+  config hashes, source run ID, code commit, fold windows and protected calendar. Observed bin counts are
+  recorded; absent/degenerate bins are not silently calibrated. Outputs remain unapproved experiment artifacts.
+- Monitoring reads explicitly supplied stored-forecast/actual records in a bounded UTC window at a virtual
+  clock. It never loads raw target datasets, refits or recalibrates. It checks site/model/threshold identity,
+  excludes unarrived labels and rejects the historical final-test period and issues before training labels
+  were available. No visible labels yields `no_visible_labels`, not a claim of healthy accuracy.
+- Outputs go to fresh `reports/deviation_runs/<id>/` directories (Git-ignored). Neither mode overwrites
+  approved thresholds, bundles or historical reports. Legacy unbound threshold YAML fails in this workflow;
+  direct retrospective detector/contract examples retain their old config compatibility.
+- The two old implicit final/natural-benchmark readers are retired and fail before I/O. This also retires
+  the misleading all-years future-trained-model natural comparison; no corrected natural fault score is
+  invented. Packet metadata marks historical model/evaluation/audit files as restore-only, with null
+  regeneration commands. Import their verified bytes rather than retraining/reopening them.
+
+Complete calibration/monitoring commands and input columns are in `docs/handoff_member2.md` section 2.7.
+The monitor template requires joined Member 3 records; post-holdout observations are not in the packet.
+For a self-contained synthetic end-to-end proof, run:
+
+```powershell
+$env:PYTHONPATH=''
+.\tmp\review_env\Scripts\python -m pytest tests/test_evaluation_safeguards.py tests/test_deviation_workflow.py -q
+.\tmp\review_env\Scripts\python -m src.models.deviation --help
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q --tb=short
+$env:CI='true'
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q --tb=short
+Remove-Item Env:CI
+.\tmp\review_env\Scripts\python -m ruff check . --exclude tools
+```
+
+Observed core suite, normally and with `CI=true`: **215 passed, 1 skipped (Feast), 1 deselected (network)**.
+All 31 installed packet artifact hashes remain unchanged. New tests exercise both real
+CLI handlers with temporary synthetic Parquet/bundle inputs, exclusive-write failures, final/test-calendar
+rejections, data/model/site identity, delayed labels, chronology and immutable outputs. The `--help` command
+also ran through `python -m src.models.deviation`. Logs: `tmp/evaluation_safeguards_before.txt` (8 failures),
+`tmp/evaluation_safeguards_focused.txt`, `tmp/evaluation_safeguards_full_suite.txt`,
+`tmp/evaluation_safeguards_ci_suite.txt`, `tmp/deviation_cli_help.txt`.
+
+Runtime remains the Python 3.12.5 review environment. Clean Python 3.11, real Feast and a shared MLflow
+server are not verified. No new dependencies, real-data retraining/recalibration, final-test benchmark,
+threshold promotion, historical packet regeneration or GitHub push. By eye, confirm the selected bundle
+hash matches both thresholds and stored forecasts, and compare actual label arrival with the virtual clock.
+Next: R6 raw-value quarantine; R7/R8 evidence limitations remain explicit. Stop after this task.
 
 ### Alert continuity (26 November 2026, step 5 only)
 
@@ -423,8 +485,8 @@ cd ../..
 # Run Feast unit test suite (9 comprehensive tests in .venv-feast):
 .\.venv-feast\Scripts\pytest tests/test_feature_store.py -v
 
-# Run production deviation detector calibration, evaluation, and reporting
-.\.venv\Scripts\python -m src.models.deviation --log-mlflow
+# Development-only calibration; produces separate unapproved artifacts, not a final-test benchmark
+.\.venv\Scripts\python -m src.models.deviation --calibrate --bundle models/solarcast_f1_bundle.joblib --reports-dir reports/deviation_runs --log-mlflow
 
 # Run deviation detector unit test suite
 .\.venv\Scripts\pytest tests/test_deviation.py -v
@@ -494,6 +556,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| 2026-11-27 | Separate model-bound dev calibration from bounded monitoring; make final-test audit immutable | Remove implicit recalibration/holdout access and arbitrary champion parameters. Preserve approved artifacts and one-time evidence; new workflows use isolated outputs, actual model identity and delayed-label checks. Historical natural/final deviation readers are retired. |
 | 2026-11-26 | Require true hourly adjacency; add incremental detector without changing retrospective wrapper | Gaps/duplicates cannot confirm persistence. Keep per-site/model in-memory state across ordered batches; emit once at second breach, use stable IDs, and report unknown arrival timing as null. Frozen bounds and historical results preserved; durable monitoring remains future work. |
 | 2026-11-26 | Require exact feature issue time in both retrieval paths; verify existing registered Parquet source without schema changes | Target-specific vectors cannot be reused within a freshness window. Missing/ambiguous rows reject, source time is returned for audit, weather nulls are preserved. Real Feast integration and live process bridge remain unverified. |
 | 2026-11-26 | Isolate future candidates and bind eligibility to saved weights; no automatic promotion | Prevent rejected runs from overwriting approved artifacts. Frozen fits stop before last development fold with label-availability purge; exact bundle is reloaded and scored. Existing full-dev model and historical results remain unchanged. |
@@ -529,6 +592,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- 2026-11-27 (step 6): Closed R5 entrypoint/runbook bugs with immutable repository-anchored first-use final-test claims, dev-only model-recipe calibration, bounded stored-record monitoring, explicit source/model/site identity and isolated outputs. Added `src/models/deviation_workflow.py`, 26 regression/end-to-end tests, CLI help verification and restore-only historical packet metadata; updated Member 2/3 runbooks. Core suite 215 passed, 1 skipped, 1 deselected; historical artifacts preserved. No actual final-test evaluation, production recalibration, new dependency or push. See section 6 for commands and verification limits.
 
 - 2026-11-26 (step 5): Fixed R4 continuity and confirmation on `m1/alert-continuity`. Added `DeviationDetector.process()` for state across ordered nonoverlapping batches, stable episode IDs and explicit/nullable label-based trigger timing; preserved `detect_deviations()` batch summaries. Added optional schema fields and 22 regressions. 30 focused tests passed; full non-network suite 189 passed, 1 skipped, 1 deselected; scoped Ruff clean. Updated monitoring handoff and marked historical rates/latencies as pre-fix evidence. No recalibration, final-test evaluation, retraining or push.
 
@@ -567,7 +632,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 0. Artifact handoff, numerical gate validation, isolated exact-candidate checks, provider target-hour
    safeguards and alert continuity/confirmation are complete; latest main
    5ac8ed0 is integrated. Continue `docs/member1_review_20261124.md` priorities one at a time:
-   runbook/final-test automation safeguards (R5), remaining data-validation findings, and real Feast/environment verification. Future
+   raw-value quarantine (R6), latency/provenance evidence (R7), remaining R8 assumptions and real Feast/environment verification. Future
    promotion must separately verify the exact eligible candidate and never refit under its approval. The existing
    Member 1 handoffs are implementation guidance, not independent proof of clean-clone readiness.
 1. **Member 2 Review & Integration:**

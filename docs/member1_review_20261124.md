@@ -2,6 +2,18 @@
 
 ## Decision
 
+**Update, 27 November 2026, step 6:** Fixed **R5** on `m1/evaluation-safeguards`. Final-test checks run
+before I/O, existing audits cannot be forced or overwritten, first access claims are exclusive, and the
+marker is anchored to the repository. Deviation now requires explicit dev calibration or bounded stored-
+record monitoring; neither mode implicitly loads final labels or overwrites approved artifacts. Calibration
+uses the supplied bundle's cloned estimator recipe on three purged dev folds with provenance. Monitoring
+checks identities, training cutoff, final calendar and label arrival. Old final/natural convenience readers
+are retired, also removing the misleading all-years future-trained natural benchmark from the executable
+workflow. Packet commands no longer suggest recreating historical model/audit bytes. 26 new tests;
+**215 passed, 1 skipped, 1 deselected** overall, scoped Ruff clean. Original eight guard regressions all
+failed before the fix. Historical outputs remain unchanged; no real holdout evaluation or recalibration.
+R6/R7 and other R8 evidence/environment limitations remain; this is not deployment sign-off.
+
 **Update, 26 November 2026, step 5:** Fixed **R4** on `m1/alert-continuity`. True hourly adjacency is
 required; duplicate/ambiguous hours, gaps and invalid/suppressed observations break persistence.
 `DeviationDetector.process()` retains in-memory state across ordered nonoverlapping batches and emits

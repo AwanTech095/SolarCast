@@ -296,6 +296,16 @@ To avoid cardinality explosion in Prometheus / Grafana, use fixed low-cardinalit
 
 ## 8. Production Alert Event Schema (v1.1.0)
 
+**Bounded monitoring input (27 November):** To use the safe `deviation --evaluate` workflow, export joined
+records as Parquet with `timestamp` (target interval start), `issue_time_utc`, `actual_available_at_utc`,
+`site_id`, `model_bundle_sha256`, `actual`, `forecast`, `quality_flag`, `is_daylight`,
+`solar_elevation_deg` and `forecast_cloud_bin`. Preserve the original stored F1 forecast and its bundle
+hash; do not recompute it using a later model. Unknown label arrival times stay missing. Calibrated
+threshold provenance must match the same bundle hash. The CLI requires explicit window/as-of timestamps,
+rejects the protected historical test calendar and waits for labels to arrive at the virtual clock.
+See Member 2 handoff section 2.7. This is a bounded replay interface; persistent online state remains
+Member 3 work, and the existing historical packet does not contain post-holdout live observations.
+
 When operational monitoring flags an anomalous event (residual deviation, input feature drift, performance degradation, or weather data quality degradation), an alert event conforming to `configs/alert_event_schema.json` (v1.1.0) is emitted:
 
 **26 November correction:** For residual alerts, keep a `DeviationDetector` instance across ordered,

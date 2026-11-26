@@ -137,31 +137,12 @@ PIPELINE_COMMANDS = {
         "--output data/processed/feast/features_set_b.parquet "
         '--start "2018-07-12 00:00:00+00:00" --end "2023-11-09 23:00:00+00:00"'
     ),
-    "data/processed/validation_residuals.parquet": (
-        "python -m src.models.train --eval-config configs/evaluation.yaml "
-        "--params-config configs/model_params.yaml --hourly data/processed/hourly.parquet "
-        "--quarter-hourly data/processed/quarter_hourly.parquet "
-        "--weather data/processed/hrrr_forecast_features.parquet "
-        "--reports-dir reports --models-dir models"
-    ),
-    "models/solarcast_f1_bundle.joblib": (
-        "python -m src.models.train --eval-config configs/evaluation.yaml "
-        "--params-config configs/model_params.yaml --hourly data/processed/hourly.parquet "
-        "--quarter-hourly data/processed/quarter_hourly.parquet "
-        "--weather data/processed/hrrr_forecast_features.parquet "
-        "--reports-dir reports --models-dir models"
-    ),
-    "reports/evaluation.json": (
-        "python -m src.models.train --eval-config configs/evaluation.yaml "
-        "--params-config configs/model_params.yaml --hourly data/processed/hourly.parquet "
-        "--quarter-hourly data/processed/quarter_hourly.parquet "
-        "--weather data/processed/hrrr_forecast_features.parquet "
-        "--reports-dir reports --models-dir models"
-    ),
-    "reports/final_test_audit.json": (
-        "python -m src.models.evaluate --final-test --force "
-        '--reason "one-time final evaluation after model selection"'
-    ),
+    # Restore immutable historical artifacts from a verified packet. Current
+    # training/calibration commands create NEW isolated artifacts, not these bytes.
+    "data/processed/validation_residuals.parquet": None,
+    "models/solarcast_f1_bundle.joblib": None,
+    "reports/evaluation.json": None,
+    "reports/final_test_audit.json": None,
     "configs/data_manifest.json": (
         "python -m src.data.ingestion --config configs/data.yaml"
     ),
@@ -613,6 +594,10 @@ def build_and_write_manifest(
             "bytes": sz,
             "sha256": sha,
             "pipeline_command": pipeline_cmd,
+            "reproduction_policy": (
+                "restore_verified_historical_artifact" if pipeline_cmd is None
+                else "source_command_requires_review"
+            ),
         })
 
     # Sort checksum lines and file records

@@ -164,25 +164,54 @@ is preserved. A new full-dev refit would require its own later validation and ca
 
 ---
 
-### 2.7 Step 7: Deviation Calibration & Alert Engine
-Calibrates 1st and 99th percentile residual thresholds across out-of-sample validation folds, updates `configs/deviation.yaml`, benchmarks detection on synthetic fault injections, evaluates historical natural anomalies, and logs run to MLflow.
+### 2.7 Step 7: Explicit Development Calibration / Bounded Monitoring
+
+The bare deviation command now fails with usage error; it cannot recalibrate or open a test set by default.
+Choose exactly one mode. Neither mode opens the protected historical final-test interval or replaces
+`configs/deviation.yaml`. The old combined benchmark and natural-case readers are retired.
 
 ```powershell
-# Deviation detector calibration & benchmarking (main .venv)
-.\.venv\Scripts\python -m src.models.deviation --log-mlflow --reports-dir reports --seed 42
+# Development-only calibration. Supply the actual bundle you intend to assess.
+.\.venv\Scripts\python -m src.models.deviation --calibrate --bundle models/solarcast_f1_bundle.joblib --eval-config configs/evaluation.yaml --hourly data/processed/hourly.parquet --features data/processed/feast/features_set_b.parquet --reports-dir reports/deviation_runs --log-mlflow
 ```
-- **CLI Flags**:
-  - `--log-mlflow`: Log metrics, artifacts, and parameters to MLflow experiment `solarcast`.
-  - `--eval-config <path>`: Path to `configs/evaluation.yaml`.
-  - `--deviation-config <path>`: Path to `configs/deviation.yaml`.
-  - `--hourly <path>`: Path to `data/processed/hourly.parquet`.
-  - `--features <path>`: Path to `data/processed/feast/features_set_b.parquet`.
-  - `--bundle <path>`: Path to `models/solarcast_f1_bundle.joblib`.
-  - `--reports-dir <path>`: Destination directory for `deviation_summary.json`.
-  - `--seed <int>`: Random seed for fault injection intervals (default: `42`).
-- **Exit Codes**:
-  - `0`: Thresholds calibrated and persisted to `configs/deviation.yaml`.
-  - `1`: Missing bundle or input files.
+
+Calibration clones that bundle's estimator recipe across 3 expanding folds in the earlier 80%, purging
+training labels unavailable at validation start. These are OOF **recipe** predictions, not the final
+bundle's saved-weight predictions. Every daylight source hour must match exactly, with source availability
+audits <= issue time. No hard-coded champion parameters are substituted. The output records bundle/data/
+feature/config hashes, source MLflow run ID, Git commit, fold windows and protected test boundaries.
+It records actual bin counts; unobserved or degenerate bins cannot be treated as calibrated evidence.
+
+Each run prints a fresh directory containing `deviation.yaml`, `validation_residuals.parquet` and
+`summary.json`. Keep it outside Git (default directory is ignored). These thresholds are unapproved
+experiment artifacts; promotion must bind the model and its matching calibration together.
+
+```powershell
+# TEMPLATE: requires joined stored forecasts/actuals from Member 3, not supplied raw meter data.
+# Dates illustrate post-holdout monitoring; these observations are not in the historical packet.
+.\.venv\Scripts\python -m src.models.deviation --evaluate --bundle models/solarcast_f1_bundle.joblib --deviation-config "reports/deviation_runs/<calibration-id>/deviation.yaml" --records "<joined-records.parquet>" --start-utc "2023-11-10T15:00:00Z" --end-utc "2023-11-10T17:00:00Z" --as-of-utc "2023-11-10T18:00:00Z" --reports-dir reports/deviation_runs --log-mlflow
+```
+
+Monitoring reads only the supplied log, never loads raw targets, fits a model or recalibrates thresholds.
+Required fields: `site_id`, `timestamp`, `issue_time_utc`, `actual_available_at_utc`,
+`model_bundle_sha256`, `actual`, `forecast`, `quality_flag`, `is_daylight`, `solar_elevation_deg`,
+`forecast_cloud_bin`. Window semantics: `[start, end)`, `start < end <= as-of`; UTC offsets required.
+The window must be after the model's last training label could arrive and must not overlap the historical
+final-test interval. Only actuals available by the virtual clock are visible. Missing labels are excluded,
+never replaced by zero; zero visible labels yield explicit `no_visible_labels` status, not healthy accuracy.
+Both record site/model identity and threshold model hash must agree. Old unbound threshold configs fail
+with a clear error; do not append an identity tag to make an unrelated calibration look compatible.
+
+Outputs are a fresh `summary.json` with context, record/threshold/model hashes and confirmation alerts.
+This is an independent bounded replay, not a durable monitor or a release-quality score; overlapping
+repeated deliveries need deduplication. `--log-mlflow` logs the run/artifacts using `MLFLOW_TRACKING_URI`;
+tracking errors propagate. Exit 0 = workflow completed, 2 = usage error, other nonzero = failed evidence/I/O.
+
+For a runnable self-contained demonstration without new plant data or reopening the final test:
+
+```powershell
+.\tmp\review_env\Scripts\python -m pytest tests/test_deviation_workflow.py -q
+```
 
 ---
 
@@ -343,7 +372,10 @@ frozen candidate's development metrics must pass the unchanged numerical thresho
 > # FORBIDDEN IN AUTOMATION / CI / AIRFLOW:
 > python -m src.models.evaluate --final-test --force ...
 > ```
-> Calling `--final-test` without `--force` intentionally crashes with `RuntimeError: PROTECTED TEST SET VIOLATION`.
+> An existing audit blocks all repeated final-test calls, including `--force --reason`. The default
+> audit path is anchored to the repository, so changing working directory cannot bypass it. A fresh first
+> use requires explicit force/reason outside CI/scheduler contexts and claims the audit exclusively before
+> any data I/O. Failed first evaluations retain their claim; never delete/reset it for a retry.
 > 
 > **Rule for Member 2**: To validate a retrained saved candidate invoke:
 > ```powershell
@@ -373,7 +405,7 @@ pytest -m "not network"
 ```
 - **Pytest Markers**:
   - `@pytest.mark.network`: Skips tests requiring live external HTTP connections (e.g., live NASA POWER API or OEDI S3 downloads).
-  - `-m "not network"`: Executes 61 unit tests across data validation, aggregation, feature engineering, baselines, models, and deviation detector in ~56 seconds.
+  - `-m "not network"`: Runs the core offline suite; use the latest HANDOFF entry for observed counts and runtime limitations.
 
 ---
 
@@ -390,7 +422,7 @@ Measured on the reference Windows host (Python 3.11):
 | **Feast Materialization** | `python feature_store/materialize.py` | 2–5 s | Materializes 2-week window into SQLite online store |
 | **Model Training & Gating** | `python -m src.models.train` | Not remeasured | 3-fold CV, freeze before Fold 3, save isolated candidate and exact-model gate |
 | **Saved Candidate Check** | `python -m src.models.evaluate --candidate-manifest <path>` | Not measured | Hash/chronology check and saved-bundle predictions; no fit |
-| **Deviation Calibration** | `python -m src.models.deviation --log-mlflow` | 10–15 s | Calibrates P1/P99 thresholds, benchmarks fault injection |
+| **Deviation Calibration** | Explicit `--calibrate --bundle ...` command in section 2.7 | Not remeasured | Dev-only OOF model-recipe calibration into isolated artifacts |
 | **Pytest CI Suite** | `pytest -m "not network"` | ~56 s | 61 unit tests pass, 1 skipped cleanly |
 | **Feast Test Suite** | `.venv-feast: pytest tests/test_feature_store.py` | ~33 s | 9 unit tests pass in dedicated Feast environment |
 
@@ -400,11 +432,15 @@ Measured on the reference Windows host (Python 3.11):
 
 To reproduce the entire pipeline from scratch on a clean machine:
 
+Use the reviewed integration revision containing the safeguards. `m1/handoff-docs` is historical.
+The local repair branch is `m1/evaluation-safeguards`; publish it before expecting another teammate to
+clone these fixes. Historical artifact restoration and creating new candidates are separate operations.
+
 - [ ] **1. Clone repository & checkout branch**:
   ```powershell
   git clone <repo-url>
   cd SolarCast
-  git checkout m1/handoff-docs
+  git checkout <reviewed-integration-commit-or-branch>
   ```
 - [ ] **2. Create and initialize main `.venv`**:
   ```powershell
@@ -489,7 +525,7 @@ When production deviation alerts or feature drift are detected, an automated ret
 |       (Candidate must beat champion by >= 2.0% without seasonal slice > 5.0% worse)     |
 |     - IF PASSED:                                                                        |
 |       * Promotes candidate in MLflow Model Registry (tag: "production")                 |
-|       * Recalibrates deviation thresholds: python -m src.models.deviation --log-mlflow |
+|       * Calibrates explicit bundle on dev folds; no final-test benchmark (see 2.7) |
 |       * Updates Feast feature table and materializes online store                       |
 |     - IF REJECTED:                                                                      |
 |       * Keeps current champion in production                                            |

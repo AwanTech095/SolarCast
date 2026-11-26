@@ -40,7 +40,7 @@ DEFAULT_QH_PATH = Path("data/processed/quarter_hourly.parquet")
 DEFAULT_WEATHER_PATH = Path("data/processed/hrrr_forecast_features.parquet")
 DEFAULT_EVAL_JSON_PATH = Path("reports/evaluation.json")
 DEFAULT_REPORTS_DIR = Path("reports")
-FINAL_TEST_LOG_PATH = Path("reports/final_test_audit.json")
+FINAL_TEST_LOG_PATH = Path(__file__).resolve().parents[2] / "reports" / "final_test_audit.json"
 
 
 def get_git_commit() -> str:
@@ -304,7 +304,7 @@ def log_final_test_audit(
         "git_commit": get_git_commit(),
         "metadata": metadata or {},
     }
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "x", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
     return path
 
@@ -314,23 +314,27 @@ def check_final_test_safeguard(
     reason: str | None = None,
     log_path: Path | str = FINAL_TEST_LOG_PATH,
 ) -> None:
-    """Enforce safeguard preventing unauthorized opening of the final test set.
+    """Require explicit first-use authorization; an existing audit is immutable.
 
-    Raises RuntimeError if the final test set was already opened unless --force
-    is explicitly supplied with a non-empty documented reason.
+    File existence is conservative: failed, partial or malformed claims also block
+    reuse. The exclusive audit write is the atomic claim, not this preflight check.
+    These application guards are not protection against deliberate filesystem tampering.
     """
     path = Path(log_path)
     if path.exists():
-        if not force:
-            raise RuntimeError(
-                "PROTECTED TEST SET VIOLATION: Final 20% test partition has already been opened! "
-                f"See {path}. Re-evaluating requires passing --force and providing a reason."
-            )
-        if not reason or len(reason.strip()) < 10:
-            raise ValueError(
-                "FORCED OPENING REJECTED: A meaningful reason (>= 10 chars) must be logged "
-                "when using --force to recompute the final test set."
-            )
+        raise RuntimeError(
+            "PROTECTED TEST SET VIOLATION: Final 20% test partition has already been opened! "
+            f"Preserve {path}; --force cannot reopen an already-used test set."
+        )
+    scheduler_keys = ("CI", "GITHUB_ACTIONS", "AIRFLOW_CTX_DAG_ID", "KFP_RUN_ID")
+    if any(os.environ.get(key, "").lower() not in ("", "0", "false") for key in scheduler_keys):
+        raise RuntimeError("PROTECTED TEST SET VIOLATION: CI/automation cannot open the final test")
+    if not force:
+        raise RuntimeError("Final test access requires explicit --force authorization and a reason")
+    if not isinstance(reason, str) or len(reason.strip()) < 10:
+        raise ValueError(
+            "A meaningful reason (>= 10 chars) is required for first final-test access"
+        )
 
 
 def run_final_test_evaluation(
@@ -364,6 +368,13 @@ def run_final_test_evaluation(
     Returns:
         Structured dictionary of evaluation results and audit metadata.
     """
+    if mode not in {"dry_run", "final_test"}:
+        raise ValueError(f"Unknown evaluation mode: {mode}")
+    if mode == "final_test":
+        check_final_test_safeguard(force=force, reason=reason)
+        # Reserve the one-time evaluation before any data I/O. A failed run still
+        # consumes the claim; do not silently retry or replace its evidence.
+        log_final_test_audit(reason=reason, metadata={"mode": mode, "status": "access_reserved"})
     start_time = time.time()
     rep_dir = Path(reports_dir)
     rep_dir.mkdir(parents=True, exist_ok=True)
@@ -415,28 +426,21 @@ def run_final_test_evaluation(
     test_df = valid_df.iloc[split_idx:].copy().reset_index(drop=True)
 
     test_start = test_df["interval_start_utc"].min()
-    test_end = test_df["interval_start_utc"].max()
 
-    # Audit excluded hours in the test calendar range
-    raw_test_window = df_h[
-        (df_h["interval_start_utc"] >= test_start) & (df_h["interval_start_utc"] <= win_end)
-    ]
-    raw_test_count = len(raw_test_window)
-    valid_test_count = int((raw_test_window["quality_flag"] == "VALID").sum())
-    suspect_zero_test_count = int((raw_test_window["quality_flag"] == "SUSPECT_ZERO").sum())
-    missing_data_test_count = int((raw_test_window["quality_flag"] == "MISSING_DATA").sum())
-    total_excluded_test_count = suspect_zero_test_count + missing_data_test_count
+    # A development research run does not inspect or report held-out outcomes.
+    suspect_zero_test_count = missing_data_test_count = total_excluded_test_count = None
+    if mode == "final_test":
+        raw_test_window = df_h[
+            (df_h["interval_start_utc"] >= test_start) & (df_h["interval_start_utc"] <= win_end)
+        ]
+        suspect_zero_test_count = int((raw_test_window["quality_flag"] == "SUSPECT_ZERO").sum())
+        missing_data_test_count = int((raw_test_window["quality_flag"] == "MISSING_DATA").sum())
+        total_excluded_test_count = suspect_zero_test_count + missing_data_test_count
 
     print(f"Evaluation Window: {win_start} to {win_end} ({len(valid_df):,} total valid hours)")
     dev_min_t = dev_df["interval_start_utc"].min()
     dev_max_t = dev_df["interval_start_utc"].max()
     print(f"Train/Dev Partition (80%): {len(dev_df):,} hours ({dev_min_t} to {dev_max_t})")
-    print(f"Test Calendar Window: {test_start} to {win_end} ({raw_test_count:,} calendar hours)")
-    print(f"  Valid Test Hours Included: {valid_test_count:,}")
-    print(
-        f"  Excluded Hours: {total_excluded_test_count} "
-        f"({suspect_zero_test_count} SUSPECT_ZERO, {missing_data_test_count} MISSING_DATA)"
-    )
 
     # 2. Configure Partition by Mode
     if mode == "dry_run":
@@ -456,26 +460,6 @@ def run_final_test_evaluation(
         print("Note: The final test partition remains strictly untouched in dry-run mode.")
     elif mode == "final_test":
         print("\n--- OFFICIAL FINAL TEST RUN: Verifying Safeguards & Audit Log ---")
-        if not force:
-            raise RuntimeError(
-                "Final test partition cannot be opened without --force and a documented --reason."
-            )
-        if not reason or len(reason.strip()) < 10:
-            raise ValueError(
-                "A documented reason (>= 10 chars) is strictly required to open the final test set."
-            )
-        check_final_test_safeguard(force=force, reason=reason)
-        log_final_test_audit(
-            reason=reason,
-            metadata={
-                "test_hours_valid": valid_test_count,
-                "excluded_hours": total_excluded_test_count,
-                "suspect_zero": suspect_zero_test_count,
-                "missing_data": missing_data_test_count,
-                "start_utc": str(test_start),
-                "end_utc": str(test_end),
-            },
-        )
         train_df = dev_df.copy().reset_index(drop=True)
         eval_df = test_df.copy().reset_index(drop=True)
         partition_name = "final_test_partition"

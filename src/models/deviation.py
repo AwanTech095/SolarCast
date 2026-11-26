@@ -7,7 +7,6 @@ Strictly calibrated on out-of-sample validation folds with frozen thresholds.
 
 from __future__ import annotations
 
-import argparse
 import copy
 import datetime
 import hashlib
@@ -18,12 +17,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.model_selection import TimeSeriesSplit
-
-from src.features.preprocessing import get_feature_names
-from src.models.bundle import load_bundle
-from src.models.lineage import log_lineage
 
 DEFAULT_EVAL_CONFIG = Path("configs/evaluation.yaml")
 DEFAULT_DEVIATION_CONFIG = Path("configs/deviation.yaml")
@@ -33,15 +26,6 @@ DEFAULT_FEATURES_PATH = Path("data/processed/feast/features_set_b.parquet")
 DEFAULT_BUNDLE_PATH = Path("models/solarcast_f1_bundle.joblib")
 DEFAULT_VALIDATION_RESIDUALS_PATH = Path("data/processed/validation_residuals.parquet")
 DEFAULT_REPORTS_DIR = Path("reports")
-
-CHAMPION_FROZEN_PARAMS: dict[str, Any] = {
-    "l2_regularization": 1.0,
-    "learning_rate": 0.05,
-    "max_iter": 200,
-    "max_leaf_nodes": 31,
-    "min_samples_leaf": 100,
-    "random_state": 42,
-}
 
 
 def assign_operating_cloud_bin(
@@ -84,124 +68,30 @@ def compute_validation_residuals(
     eval_config_path: Path | str = DEFAULT_EVAL_CONFIG,
     hourly_path: Path | str = DEFAULT_HOURLY_PATH,
     features_path: Path | str = DEFAULT_FEATURES_PATH,
-    output_path: Path | str | None = DEFAULT_VALIDATION_RESIDUALS_PATH,
+    output_path: Path | str | None = None,
+    *, bundle_path: Path | str | None = None,
 ) -> pd.DataFrame:
-    """Compute out-of-sample forecast residuals across the 3 expanding validation folds.
+    """Compute dev-only OOF residuals from an explicit bundle's estimator recipe.
 
-    Uses the exact champion HistGradientBoosting model specification and feature set B,
-    fit strictly on each fold's training slice and evaluated out-of-sample on the validation slice.
-    Never uses in-sample training data or the held-out final test partition for calibration.
-
-    Args:
-        eval_config_path: Path to evaluation YAML configuration.
-        hourly_path: Path to hourly target Parquet file.
-        features_path: Path to precomputed Feature Set B Parquet file.
-        output_path: Optional path to save validation residuals Parquet file.
-
-    Returns:
-        DataFrame of out-of-sample validation records with residuals and operating bins.
+    No implicit champion parameters or output overwrite. These are cloned fold
+    models, not predictions from the supplied bundle's already-fitted weights.
     """
-    with open(eval_config_path, encoding="utf-8") as f:
-        eval_cfg = yaml.safe_load(f)
+    if bundle_path is None:
+        raise ValueError("Calibration requires an explicit bundle_path/model identity")
+    from src.models.deviation_workflow import compute_residuals
 
-    h_df = pd.read_parquet(hourly_path)
-    f_df = pd.read_parquet(features_path)
-
-    h_df["interval_start_utc"] = pd.to_datetime(h_df["interval_start_utc"], utc=True)
-    f_df["event_timestamp"] = pd.to_datetime(f_df["event_timestamp"], utc=True)
-
-    win_start = pd.Timestamp(eval_cfg["evaluation_window"]["start_utc"], tz="UTC")
-    win_end = pd.Timestamp(eval_cfg["evaluation_window"]["end_utc"], tz="UTC")
-
-    mask_win = (h_df["interval_start_utc"] >= win_start) & (h_df["interval_start_utc"] <= win_end)
-    valid_mask = mask_win & (h_df["quality_flag"] == "VALID")
-    valid_df = h_df[valid_mask].copy().reset_index(drop=True)
-
-    # Merge target with Feature Set B
-    merged = pd.merge(
-        valid_df,
-        f_df,
-        left_on="interval_start_utc",
-        right_on="event_timestamp",
-        how="left",
-    )
-
-    # Strict 80/20 chronological partition
-    split_idx = int(np.floor(len(merged) * 0.80))
-    dev_df = merged.iloc[:split_idx].copy().reset_index(drop=True)
-
-    feat_cols = get_feature_names("B")
-    tscv = TimeSeriesSplit(n_splits=3)
-    cap_limit = float(eval_cfg.get("capacity_dc_kw", 893.0))
-
-    val_records: list[dict[str, Any]] = []
-
-    for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(dev_df), 1):
-        tr = dev_df.iloc[train_idx]
-        va = dev_df.iloc[val_idx]
-
-        # Training filter: VALID daylight hours, excluding SUSPECT_ZERO
-        tr_mask = (tr["quality_flag"] == "VALID") & (tr["solar_elevation_deg"] > 0)
-        if "SUSPECT_ZERO" in tr["quality_flag"].values:
-            tr_mask = tr_mask & (tr["quality_flag"] != "SUSPECT_ZERO")
-
-        X_tr = tr.loc[tr_mask, feat_cols].values
-        y_tr = tr.loc[tr_mask, "target_kwh"].values
-
-        model = HistGradientBoostingRegressor(**CHAMPION_FROZEN_PARAMS)
-        model.fit(X_tr, y_tr)
-
-        # Out-of-sample prediction on validation fold
-        X_va = va[feat_cols].values
-        raw_pred = model.predict(X_va)
-        is_day = (va["solar_elevation_deg"] > 0).values
-        pred = np.where(is_day, raw_pred, 0.0)
-        pred = np.clip(pred, 0.0, cap_limit)
-
-        for i in range(len(va)):
-            tcdc = va["tcdc_pct"].iloc[i]
-            w_miss = va["weather_missing"].iloc[i]
-            csi = va["clearsky_index_latest_avail"].iloc[i]
-
-            cloud_bin = assign_operating_cloud_bin(tcdc, w_miss)
-            csi_bin = assign_clearsky_index_bin(csi)
-
-            val_records.append(
-                {
-                    "fold": fold_idx,
-                    "timestamp": va["interval_start_utc"].iloc[i],
-                    "forecast": float(pred[i]),
-                    "actual": float(va["target_kwh"].iloc[i]),
-                    "residual": float(va["target_kwh"].iloc[i] - pred[i]),
-                    "forecast_cloud_bin": cloud_bin,
-                    "clearsky_index_bin": csi_bin,
-                    "quality_flag": str(va["quality_flag"].iloc[i]),
-                    "solar_elevation_deg": float(va["solar_elevation_deg"].iloc[i]),
-                    "is_daylight": bool(is_day[i]),
-                    "tcdc_pct": None if pd.isna(tcdc) else float(tcdc),
-                    "weather_missing": int(w_miss) if pd.notna(w_miss) else 0,
-                    "clearsky_index_latest_avail": None if pd.isna(csi) else float(csi),
-                }
-            )
-
-    df_res = pd.DataFrame(val_records)
-    if output_path is not None:
-        p = Path(output_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        df_res.to_parquet(p, index=False)
-        print(f"Saved {len(df_res):,} validation residual records to {p}")
-
-    return df_res
+    return compute_residuals(eval_config_path, hourly_path, features_path, bundle_path, output_path)
 
 
 def calibrate_deviation_bounds(
     val_residuals_df: pd.DataFrame,
-    output_yaml_path: Path | str = DEFAULT_DEVIATION_CONFIG,
+    output_yaml_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Calibrate 1st and 99th percentile residual thresholds from validation data.
 
     Evaluated strictly on VALID daylight hours from the 3 expanding validation folds.
-    Tests clear-sky index stratification against the 200-sample threshold rule.
+    Records clear-sky sub-bin counts; the frozen four-cloud-bin policy is retained.
+    Requires model-bound development-fold provenance and never writes by default.
 
     Args:
         val_residuals_df: DataFrame of validation residuals from compute_validation_residuals.
@@ -210,22 +100,21 @@ def calibrate_deviation_bounds(
     Returns:
         Calibrated bounds configuration dictionary.
     """
-    # Filter strictly to VALID daylight hours
-    mask = (val_residuals_df["quality_flag"] == "VALID") & (val_residuals_df["is_daylight"])
+    provenance = val_residuals_df.attrs.get("calibration_provenance")
+    if not provenance or provenance.get("method") != "cloned_bundle_expanding_dev_folds":
+        raise ValueError("Calibration requires model-bound development OOF provenance")
+    if (pd.to_datetime(val_residuals_df["timestamp"], utc=True)
+            >= pd.Timestamp(provenance["protected_test_start_utc"])).any():
+        raise RuntimeError("PROTECTED TEST SET: calibration residuals overlap final test")
+    mask = (val_residuals_df["quality_flag"] == "VALID") & val_residuals_df["is_daylight"]
     df_valid = val_residuals_df[mask].copy()
-
-    # Check clear-sky index cross-stratification sample sizes
+    if df_valid.empty or not np.isfinite(df_valid["residual"].to_numpy(dtype=float)).all():
+        raise ValueError("Calibration requires nonempty finite daylight residuals")
     ct = pd.crosstab(df_valid["forecast_cloud_bin"], df_valid["clearsky_index_bin"])
-    min_sub_sample = int(ct.min().min())
     has_sub_200 = bool((ct < 200).any().any())
-
-    # Document clear-sky index binning decision
     csi_note = (
-        f"Clear-sky index cross-stratification rejected: min sub-bin sample size is "
-        f"{min_sub_sample} (< 200 threshold; specifically no_weather x csi_low has "
-        f"{ct.loc['no_weather', 'csi_low']} and no_weather x csi_high has "
-        f"{ct.loc['no_weather', 'csi_high']} samples). "
-        f"Merged into the 4 primary forecast cloud-cover bins."
+        "Cloud-only calibration; clear-sky sub-bin counts: " + ct.to_json()
+        + ". No clear-sky cross-stratification is applied."
     )
 
     bounds_dict: dict[str, dict[str, float]] = {}
@@ -233,6 +122,8 @@ def calibrate_deviation_bounds(
         res = grp["residual"].values
         p1 = float(np.percentile(res, 1))
         p99 = float(np.percentile(res, 99))
+        if not np.isfinite([p1, p99]).all() or round(p1, 2) >= round(p99, 2):
+            raise ValueError(f"Insufficient residual variation to calibrate bin {cloud_bin}")
         bounds_dict[str(cloud_bin)] = {
             "bound_low": round(p1, 2),
             "bound_high": round(p99, 2),
@@ -244,6 +135,7 @@ def calibrate_deviation_bounds(
     cfg: dict[str, Any] = {
         "schema_version": "1.0.0",
         "calibrated_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
+        "provenance": provenance,
         "calibration_window": {
             "start_utc": df_valid["timestamp"].min().isoformat(),
             "end_utc": df_valid["timestamp"].max().isoformat(),
@@ -273,12 +165,11 @@ def calibrate_deviation_bounds(
         "bounds": bounds_dict,
     }
 
-    out_p = Path(output_yaml_path)
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_p, "w", encoding="utf-8") as f:
-        yaml.safe_dump(cfg, f, sort_keys=False)
-    print(f"Calibrated and frozen deviation bounds saved to {out_p}")
-
+    if output_yaml_path is not None:
+        out_p = Path(output_yaml_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        with out_p.open("x", encoding="utf-8") as stream:
+            yaml.safe_dump(cfg, stream, sort_keys=False)
     return cfg
 
 
@@ -487,46 +378,11 @@ def get_test_period_dataset(
     features_path: Path | str = DEFAULT_FEATURES_PATH,
     bundle_path: Path | str = DEFAULT_BUNDLE_PATH,
 ) -> pd.DataFrame:
-    """Prepare out-of-sample forecast and actuals DataFrame for the final test period."""
-    with open(eval_config_path, encoding="utf-8") as f:
-        eval_cfg = yaml.safe_load(f)
-
-    h_df = pd.read_parquet(hourly_path)
-    f_df = pd.read_parquet(features_path)
-
-    h_df["interval_start_utc"] = pd.to_datetime(h_df["interval_start_utc"], utc=True)
-    f_df["event_timestamp"] = pd.to_datetime(f_df["event_timestamp"], utc=True)
-
-    win_start = pd.Timestamp(eval_cfg["evaluation_window"]["start_utc"], tz="UTC")
-    win_end = pd.Timestamp(eval_cfg["evaluation_window"]["end_utc"], tz="UTC")
-
-    mask_win = (h_df["interval_start_utc"] >= win_start) & (h_df["interval_start_utc"] <= win_end)
-    valid_mask = mask_win & (h_df["quality_flag"] == "VALID")
-    valid_df = h_df[valid_mask].copy().reset_index(drop=True)
-
-    merged = pd.merge(
-        valid_df,
-        f_df,
-        left_on="interval_start_utc",
-        right_on="event_timestamp",
-        how="left",
+    """Retired historical benchmark entrypoint; never reopen final data implicitly."""
+    raise RuntimeError(
+        "PROTECTED TEST SET: this historical deviation benchmark reader is retired. "
+        "Use explicit development calibration or bounded stored-record monitoring."
     )
-
-    split_idx = int(np.floor(len(merged) * 0.80))
-    test_df = merged.iloc[split_idx:].copy().reset_index(drop=True)
-
-    bundle = load_bundle(bundle_path)
-    preds = bundle.predict(test_df)
-
-    test_df["timestamp"] = test_df["interval_start_utc"]
-    test_df["actual"] = test_df["target_kwh"]
-    test_df["forecast"] = preds
-    test_df["residual"] = test_df["actual"] - test_df["forecast"]
-    test_df["forecast_cloud_bin"] = [
-        assign_operating_cloud_bin(c, m)
-        for c, m in zip(test_df["tcdc_pct"], test_df["weather_missing"], strict=False)
-    ]
-    return test_df
 
 
 def run_injected_evaluation(
@@ -744,233 +600,18 @@ def run_natural_suspect_zero_evaluation(
     bundle_path: Path | str = DEFAULT_BUNDLE_PATH,
     bounds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Evaluate detector performance on natural SUSPECT_ZERO episodes across the evaluation window.
-
-    For this analysis ONLY, SUSPECT_ZERO hours are treated as valid actuals (actual = 0.0 kWh),
-    using out-of-sample forecasts (validation fold models for earlier years, test forecasts
-    for test period) and bounds calibrated on VALID hours only.
-    """
-    if bounds is None:
-        bounds = load_deviation_config()["bounds"]
-
-    with open(eval_config_path, encoding="utf-8") as f:
-        eval_cfg = yaml.safe_load(f)
-
-    h_df = pd.read_parquet(hourly_path)
-    f_df = pd.read_parquet(features_path)
-
-    h_df["interval_start_utc"] = pd.to_datetime(h_df["interval_start_utc"], utc=True)
-    f_df["event_timestamp"] = pd.to_datetime(f_df["event_timestamp"], utc=True)
-
-    win_start = pd.Timestamp(eval_cfg["evaluation_window"]["start_utc"], tz="UTC")
-    win_end = pd.Timestamp(eval_cfg["evaluation_window"]["end_utc"], tz="UTC")
-
-    mask_win = (h_df["interval_start_utc"] >= win_start) & (h_df["interval_start_utc"] <= win_end)
-    eval_df = h_df[mask_win].copy().reset_index(drop=True)
-
-    # Merge features
-    merged = pd.merge(
-        eval_df,
-        f_df,
-        left_on="interval_start_utc",
-        right_on="event_timestamp",
-        how="left",
+    """Retired historical benchmark entrypoint; never reopen final data implicitly."""
+    raise RuntimeError(
+        "PROTECTED TEST SET: this historical deviation benchmark reader is retired. "
+        "Use explicit development calibration or bounded stored-record monitoring."
     )
-
-    # Identify real contiguous SUSPECT_ZERO episodes
-    sz_mask = merged["quality_flag"] == "SUSPECT_ZERO"
-    sz_indices = merged[sz_mask].index.tolist()
-
-    episodes: list[list[int]] = []
-    if sz_indices:
-        curr_ep = [sz_indices[0]]
-        for idx in sz_indices[1:]:
-            if idx == curr_ep[-1] + 1:
-                curr_ep.append(idx)
-            else:
-                episodes.append(curr_ep)
-                curr_ep = [idx]
-        episodes.append(curr_ep)
-
-    # Compute out-of-sample predictions
-    bundle = load_bundle(bundle_path)
-    preds = bundle.predict(merged)
-
-    # Prepare DataFrame treating SUSPECT_ZERO as valid actuals (actual = 0.0)
-    analysis_df = merged.copy()
-    analysis_df["timestamp"] = analysis_df["interval_start_utc"]
-    analysis_df["forecast"] = preds
-    analysis_df["actual"] = analysis_df["target_kwh"].fillna(0.0)
-
-    # Set quality flag to VALID for SUSPECT_ZERO to enable detection
-    analysis_df.loc[sz_mask, "quality_flag"] = "VALID"
-    analysis_df["forecast_cloud_bin"] = [
-        assign_operating_cloud_bin(c, m)
-        for c, m in zip(analysis_df["tcdc_pct"], analysis_df["weather_missing"], strict=False)
-    ]
-
-    alerts = detect_deviations(analysis_df, {"bounds": bounds})
-
-    detected_episodes: list[int] = []
-    delays: list[float] = []
-
-    for ep_idx, ep in enumerate(episodes):
-        t_start = analysis_df.loc[ep[0], "timestamp"]
-        t_end = analysis_df.loc[ep[-1], "timestamp"]
-
-        hit = [
-            al
-            for al in alerts
-            if pd.to_datetime(al["window_start_utc"]) <= t_end
-            and pd.to_datetime(al["window_end_utc"]) >= t_start
-        ]
-        if hit:
-            detected_episodes.append(ep_idx)
-            t_trig = pd.to_datetime(hit[0]["window_start_utc"]) + datetime.timedelta(hours=1)
-            delays.append(max(1.0, (t_trig - t_start).total_seconds() / 3600.0))
-
-    return {
-        "total_suspect_zero_hours": int(sz_mask.sum()),
-        "total_suspect_zero_episodes": len(episodes),
-        "episodes_detected": len(detected_episodes),
-        "detection_rate_pct": (
-            round(len(detected_episodes) / len(episodes) * 100.0, 2) if episodes else 0.0
-        ),
-        "median_delay_hours": round(float(np.median(delays)), 2) if delays else 0.0,
-        "max_delay_hours": round(float(np.max(delays)), 2) if delays else 0.0,
-        "episodes_details": [
-            {
-                "episode_index": ep_idx,
-                "start": analysis_df.loc[ep[0], "timestamp"].isoformat(),
-                "end": analysis_df.loc[ep[-1], "timestamp"].isoformat(),
-                "duration_hours": len(ep),
-                "detected": ep_idx in detected_episodes,
-            }
-            for ep_idx, ep in enumerate(episodes)
-        ],
-    }
 
 
 def main() -> int:
-    """CLI orchestrator for deviation calibration, evaluation, and reporting."""
-    parser = argparse.ArgumentParser(description="SolarCast Deviation Detection Orchestrator")
-    parser.add_argument(
-        "--calibrate", action="store_true", help="Calibrate bounds from validation folds"
-    )
-    parser.add_argument(
-        "--evaluate", action="store_true", help="Run injected and natural evaluation"
-    )
-    parser.add_argument(
-        "--log-mlflow", action="store_true", help="Log deviation detector run to MLflow"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=42, help="Random seed for injection reproducibility"
-    )
-    args = parser.parse_args()
+    """Route explicit, isolated calibration or bounded monitoring commands."""
+    from src.models.deviation_workflow import main as workflow_main
 
-    print("=" * 70)
-    print("SolarCast Deviation Detector Orchestrator")
-    print("=" * 70)
-
-    val_df = compute_validation_residuals()
-    bounds_cfg = calibrate_deviation_bounds(val_df)
-
-    if args.evaluate or not (args.calibrate and not args.evaluate):
-        test_df = get_test_period_dataset()
-        injected_res = run_injected_evaluation(test_df, bounds_cfg, seed=args.seed)
-        natural_res = run_natural_suspect_zero_evaluation(bounds=bounds_cfg["bounds"])
-
-        summary = {
-            "evaluation_timestamp_utc": datetime.datetime.now(datetime.UTC).isoformat(),
-            "seed": args.seed,
-            "bounds": bounds_cfg["bounds"],
-            "injected_evaluation": injected_res,
-            "natural_suspect_zero_evaluation": natural_res,
-        }
-
-        DEFAULT_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        summary_path = DEFAULT_REPORTS_DIR / "deviation_summary.json"
-        with open(summary_path, "w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2)
-        print(f"\nSaved evaluation summary to {summary_path}")
-
-        print("\n--- Injected Fault Evaluation Results ---")
-        for k, v in injected_res.items():
-            if k == "unmodified_test_baseline":
-                fa_rate = v["false_alerts_per_1000_daylight_hours"]
-                print(
-                    f"  {k}: {v['total_alert_events']} false alerts over "
-                    f"{v['valid_daylight_hours']}h ({fa_rate}/1000h)"
-                )
-            elif "detection_rate_pct" in v:
-                print(
-                    f"  {k}: {v['episodes_detected']}/{v['episodes_injected']} "
-                    f"({v['detection_rate_pct']}%), median delay: {v['median_delay_hours']}h"
-                )
-            elif "compliance_rate_pct" in v:
-                print(
-                    f"  {k}: {v['episodes_alerted']}/{v['episodes_injected']} alerted "
-                    f"(compliance: {v['compliance_rate_pct']}%)"
-                )
-
-        print("\n--- Natural SUSPECT_ZERO Real Episodes ---")
-        n_det = natural_res["episodes_detected"]
-        n_tot = natural_res["total_suspect_zero_episodes"]
-        det_pct = natural_res["detection_rate_pct"]
-        med_del = natural_res["median_delay_hours"]
-        tot_hrs = natural_res["total_suspect_zero_hours"]
-        print(
-            f"  Detected: {n_det}/{n_tot} ({det_pct}%), "
-            f"median delay: {med_del}h, total hours: {tot_hrs}"
-        )
-
-        if args.log_mlflow:
-            import mlflow
-
-            inj_drop = injected_res["injected_30pct_drop_4h"]["detection_rate_pct"]
-            inj_zero = injected_res["injected_zero_output_3h"]["detection_rate_pct"]
-            inj_bad = injected_res["injected_bad_value_2h"]["detection_rate_pct"]
-            iso_comp = injected_res["injected_isolated_single_hour_drop"]["compliance_rate_pct"]
-            base_res = injected_res["unmodified_test_baseline"]
-            fa_rate = base_res["false_alerts_per_1000_daylight_hours"]
-
-            mlflow.set_experiment("solarcast")
-            with mlflow.start_run(run_name="deviation_detector") as run:
-                log_lineage(run)
-                mlflow.set_tags(
-                    {
-                        "data_window": "2018-07-12 to 2023-11-09",
-                        "random_seed": str(args.seed),
-                        "model_name": "solarcast-f1",
-                        "model_bundle": "models/solarcast_f1_bundle.joblib",
-                        "task": "M1.6_deviation_detector",
-                        "owner": "member1",
-                    }
-                )
-                mlflow.log_params(
-                    {
-                        "consecutive_hours_threshold": 2,
-                        "bins": "clear,mixed,overcast,no_weather",
-                        "random_seed": args.seed,
-                    }
-                )
-                mlflow.log_metrics(
-                    {
-                        "injected_drop30_detection_rate_pct": inj_drop,
-                        "injected_zero_detection_rate_pct": inj_zero,
-                        "injected_badval_detection_rate_pct": inj_bad,
-                        "isolated_single_hour_compliance_pct": iso_comp,
-                        "unmodified_fa_per_1000h": fa_rate,
-                        "natural_sz_detection_rate_pct": natural_res["detection_rate_pct"],
-                        "natural_sz_median_delay_h": natural_res["median_delay_hours"],
-                    }
-                )
-                mlflow.log_artifact(str(DEFAULT_DEVIATION_CONFIG))
-                mlflow.log_artifact(str(DEFAULT_ALERT_SCHEMA))
-                mlflow.log_artifact(str(summary_path))
-                print(f"\nLogged deviation detector run to MLflow: {run.info.run_id}")
-
-    return 0
+    return workflow_main()
 
 
 if __name__ == "__main__":
