@@ -2,6 +2,15 @@
 
 ## Decision
 
+**Update, 26 November 2026, step 4:** Fixed **R3** provider target-hour safeguards on
+`m1/exact-feature-hour`. Every online feature must match the requested UTC instant and site. Offline replay
+requires exact keys in the registered local Parquet source, checks returned values and exposes source time;
+missing hours/night rows and ambiguous source keys reject. Existing data/model schema is unchanged.
+Added 23 core contract tests with fake Feast responses and temporary Parquet sources: initial tests exposed
+17 failures, 3 passes; final non-network suite **167 passed, 1 skipped, 1 deselected**, scoped Ruff clean.
+Real Feast integration remains unexecuted in this Python 3.12 review runtime. Member 3 docs define the
+isolated feature/model process boundary; a deployed bridge is not implemented. R4 alert continuity is next.
+
 **Update, 26 November 2026, step 3:** R2's training overwrite, exact-artifact evaluation and rejected-success
 issues are fixed on `m1/candidate-artifacts`. Unique candidates carry hash-bound saved-model validation;
 approved/historical files are preserved for either gate outcome. Failed candidates exit 2 and are not

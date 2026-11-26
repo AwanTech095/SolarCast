@@ -43,7 +43,9 @@ solar_source = FileSource(
 #   nulls are returned.
 # - Online retrieval (get_online_features): Feast SQLite online store returns the latest
 #   materialized record for the entity key without evaluating TTL or staleness at query time.
-#   A custom wrapper (src.features.feast_provider) enforces staleness/future rejection.
+#   The provider requires every requested feature to match the exact issue time.
+#   Offline requests also verify exact source keys/values; TTL never permits reuse
+#   of an older target-specific row for an absent hour.
 solarcast_f1_set_b_view = FeatureView(
     name="solarcast_f1_set_b",
     entities=[site_entity],

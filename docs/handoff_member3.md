@@ -123,6 +123,9 @@ Client Request (POST /predict)
      * Entity exists? -> if not: raise EntityNotFoundError (HTTP 503)
      * Feature timestamp > issue_time? -> if yes: raise FutureFeatureError (HTTP 503 / 400)
      * Age > max_staleness_hours? -> if yes: raise StaleFeatureError (HTTP 503)
+     * Every requested feature timestamp == requested issue_time? -> otherwise
+       raise TargetHourMismatchError (HTTP 503), even when age is below 2 hours.
+     * Missing feature records or wrong returned site? -> EntityNotFoundError (HTTP 503).
                │
                ▼
 3. Model Inference:
@@ -135,16 +138,40 @@ Client Request (POST /predict)
 ```
 
 ### 3.2 Historical Replay Simulation
+**Updated 26 November 2026:** Offline retrieval requires exact site/hour source rows and verifies the
+returned values against the registered local Parquet source. It returns `source_feature_time_utc` for
+audit. Missing requested hours reject the batch, including nights absent from the daylight-only table.
+Do not substitute yesterday's or the previous daylight hour's features. For an absent row, return feature
+unavailable; a future on-demand path must rebuild that hour through shared `build_features` before inference.
+
+**Environment boundary:** Run feature retrieval in the isolated Feast environment, and model inference in
+the core model environment. Pass the feature vector plus `site_id`, `requested_issue_time_utc` and
+`source_feature_time_utc` through an explicit JSON/Parquet boundary; verify site/time equality again at
+inference. A live bridge/service is Member 3 implementation work and has not been built or tested here.
+Provider contract tests pass with a fake backend; real Feast integration must still be checked in its environment.
+
 Because the Feast online SQLite store holds only the latest materialized record per site, historical replay over multiple consecutive hours must **not** query the online store without updating the store at every step. Instead, batch historical replay should use `src.features.feast_provider.replay_historical_features`:
 
 ```python
 from src.features.feast_provider import replay_historical_features
-from src.models.bundle import load_bundle
 
-bundle = load_bundle("models/solarcast_f1_bundle.joblib")
-issue_times = ["2023-06-15T12:00:00+00:00", "2023-06-15T13:00:00+00:00", "2023-06-15T14:00:00+00:00"]
+# Feast process (.venv-feast); use exact daylight hours present in the source.
+issue_times = ["2023-06-15T15:00:00+00:00", "2023-06-15T16:00:00+00:00", "2023-06-15T17:00:00+00:00"]
 
 features_df = replay_historical_features(site_id="2107", issue_times=issue_times)
+features_df.to_parquet("tmp/replay_features.parquet", index=False)
+```
+
+Then in the core model process (`.venv`), read the same trusted transfer file:
+
+```python
+import pandas as pd
+from src.models.bundle import load_bundle
+
+features_df = pd.read_parquet("tmp/replay_features.parquet")
+assert (features_df["site_id"] == "2107").all()
+assert (features_df["event_timestamp"] == features_df["source_feature_time_utc"]).all()
+bundle = load_bundle("models/solarcast_f1_bundle.joblib")
 predictions = bundle.predict(features_df)
 ```
 
@@ -172,7 +199,8 @@ predictions = bundle.predict(features_df)
   - `"weather_missing"`: When `weather_missing == 1`.
   - `"weather_fallback_used"`: When `weather_fallback_used == 1` (forecast is older than nominal 2h).
   - `"night_forced_zero"`: When `solar_elevation_target_deg <= 0.0`.
-  - `"approaching_staleness"`: When `feature_staleness_hours > 1.5`.
+  - Successful exact-hour retrieval has `feature_staleness_hours == 0`; the older
+    `"approaching_staleness"` warning must not authorize reuse of another hour's features.
 
 ### 4.2 Standard HTTP Status Codes & Error Semantics
 | HTTP Status | Error Type | Cause | Recommended Action |
@@ -183,6 +211,7 @@ predictions = bundle.predict(features_df)
 | **`503 Service Unavailable`** | `EntityNotFoundError` | Entity `"2107"` has not been materialized in Feast online store | Trigger materialization pipeline |
 | **`503 Service Unavailable`** | `StaleFeatureError` | Stored features are older than `max_staleness_hours` (default 2.0h) | Check plant telemetry stream / weather ingest |
 | **`503 Service Unavailable`** | `FutureFeatureError` | Requested `issue_time_utc` is in the past relative to the latest online store record | Check clock synchronization or replay setup |
+| **`503 Service Unavailable`** | `TargetHourMismatchError` | A target-specific row is for another issue hour, even within the freshness limit, or an exact offline row is absent | Materialize/rebuild the requested hour; never reuse older target features |
 
 ---
 

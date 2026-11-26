@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-26 (isolated candidate artifacts, step 3). Update this file after every task (see AGENTS.md).
+**Last updated:** 2026-11-26 (exact target-hour feature retrieval, step 4). Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -17,7 +17,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer verified and latest main 5ac8ed0 integrated. Numerical gate and isolated exact-candidate checks fixed. Feature-time/alert fixes, future promotion integration and exact-environment verification remain. See docs/member1_review_20261124.md. |
+| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer, numerical gate, isolated exact-candidate checks and provider target-hour checks fixed. Alert/runbook fixes, future promotion integration and exact-environment/real Feast verification remain. See docs/member1_review_20261124.md. |
+| M1.exact-feature-hour | Exact issue-hour identity in online/offline retrieval (step 4) | Done (tests pass) | All online feature timestamps must match requested time; offline checks exact registered-source keys and returned values. Missing night/hour rows reject, source time returned for audit. 23 new core tests; 167 passed, 1 skipped, 1 deselected overall. Real Feast integration not run. |
 | M1.candidate-artifacts | Isolate candidate outputs and evaluate saved weights (step 3) | Done (tests pass) | Unique candidate directories, SHA-256 manifest, reloaded-model development validation, rejected exit 2, no rejected registration or approved-file overwrite. 17 new regression cases; full non-network suite 144 passed, 1 skipped, 1 deselected. No real-data retraining or deployment. |
 | M1.packet | Receive and verify artifact packet (step 1) | Done (tests pass) | SolarCast_packet.zip: 31 payload hashes/sizes verified; 28 missing data/model files installed; three existing config/report copies match. Bundle data hashes and MLflow run ID checked; 64 tests passed, 2 skipped under the existing Python 3.12 review runtime. Separate Feast/Python 3.11 and bug fixes remain. Receipt: reports/packet_receipt_20261126.json. |
 | M1.gate-validation | Fail-closed numerical quality gate (step 2) | Done (tests pass) | Confirmed latest main still accepted NaN metrics. Fixed evaluate_candidate_gate and added 44 regression cases: missing/nonfinite/negative metrics, zero baseline, invalid/empty predictions, invalid policy and exact threshold behavior. Full non-network suite: 127 passed, 1 skipped, 1 deselected; Ruff passed with local tools excluded. Does not complete candidate artifact/promotion integration. |
@@ -118,6 +119,50 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Exact feature hour (26 November 2026, step 4 only)
+
+Branch: `m1/exact-feature-hour`. Fixes review **R3** (earlier step-3 next-step prose mislabeled it R4).
+The original provider accepted a 15:00 feature row for a 16:00 forecast inside its 2-hour freshness limit.
+That changes target-hour solar geometry, calendar, lags and weather. New synthetic tests first showed
+**17 failures, 3 passes**; after the fix, 23 provider contract cases pass without requiring Feast.
+
+- Online retrieval validates the requested site, all requested feature records and their timestamps.
+  Exact equality is required, including subsecond precision. Older-within-limit rows now raise
+  `TargetHourMismatchError`; existing future/stale errors remain. A null weather value is permitted
+  when its record exists for the exact hour. Missing records are not interpreted as weather nulls.
+- All requests require timezone-aware timestamps and normalize to UTC. No silent local-time assumption.
+  Staleness limits must be finite/nonnegative and cannot authorize a different target hour.
+- Offline retrieval checks `(site_id, event_timestamp)` against the registered view's existing local
+  Parquet FileSource. Source keys must be unique. Every request must exist exactly before calling Feast;
+  every returned value must match that exact row afterward. Source weather NaNs stay NaN.
+  Output adds `source_feature_time_utc`. It cannot use an as-of echo of the request time as source evidence.
+- This source verifier supports the current unmapped local Parquet source only. Remote/mapped backends
+  require another adapter and fail explicitly here. Reading projected source columns adds offline I/O.
+  Data tables, registry definitions, model features and installed artifacts were not rebuilt or changed.
+- Nights absent from the daylight-only table return feature-unavailable errors; never reuse prior daylight
+  rows. A future on-demand path must rebuild target-specific features with the shared builder.
+- Member 3 handoff now defines an explicit Feast-process -> JSON/Parquet -> core-model-process boundary
+  with site/time checks. A live bridge/API is not implemented in this step.
+
+```powershell
+$env:PYTHONPATH=''
+.\tmp\review_env\Scripts\python -m pytest tests/test_feast_provider_contract.py -q
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q --tb=short
+.\tmp\review_env\Scripts\python -m ruff check . --exclude tools
+
+# Required follow-up in an existing isolated Feast environment (not available locally).
+.\.venv-feast\Scripts\python -m pytest tests/test_feature_store.py -q
+```
+
+Full non-network suite: **167 passed, 1 skipped (Feast), 1 deselected (network)**; scoped Ruff passed.
+Logs: `tmp/exact_feature_hour_before.txt`, `tmp/exact_feature_hour_after.txt`,
+`tmp/exact_feature_hour_full_suite.txt`. Verification uses Python 3.12.5 and mocked backend responses plus
+temporary Parquet sources. The real Feast backend, clean Python 3.11 environment and live service boundary
+are not verified. No real model retraining, final-test evaluation, materialization, new dependencies or push.
+Before deployment, inspect requested versus source feature time (same UTC instant), site identity, and the
+feature-unavailable response for a missing night/hour; do not convert missing rows into zero production.
+Next step: review **R4**, continuity in deviation alerts. Stop here until asked to continue.
 
 ### Isolated candidate artifacts (26 November 2026, step 3 only)
 
@@ -404,6 +449,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| 2026-11-26 | Require exact feature issue time in both retrieval paths; verify existing registered Parquet source without schema changes | Target-specific vectors cannot be reused within a freshness window. Missing/ambiguous rows reject, source time is returned for audit, weather nulls are preserved. Real Feast integration and live process bridge remain unverified. |
 | 2026-11-26 | Isolate future candidates and bind eligibility to saved weights; no automatic promotion | Prevent rejected runs from overwriting approved artifacts. Frozen fits stop before last development fold with label-availability purge; exact bundle is reloaded and scored. Existing full-dev model and historical results remain unchanged. |
 |---|---|---|
 | 2026-11-26 | Step 2: reject invalid numerical gate evidence and invalid policy; preserve valid decisions | Added 44 regression cases, reproduced 37 failures on latest main, then passed focused and full suites. Invalid values become null in rejection records. Candidate artifact/promotion safeguards remain a separate task; no retraining/final-test benchmark. |
@@ -438,6 +484,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 11. Changelog
 
+- 2026-11-26 (step 4): Fixed R3 target-hour retrieval on `m1/exact-feature-hour`: exact timestamps for every online feature, exact site/hour source membership and returned-value checks offline, explicit source timestamp output, timezone/policy validation, and no substitution for missing night rows. Added 23 deterministic contract tests; full non-network suite 167 passed, 1 skipped, 1 deselected; scoped Ruff passed. Updated feature-store and Member 3 environment/serving guidance. Artifacts preserved; no real Feast run, retraining, final-test access or push.
+
 - 2026-11-26 (step 3): Fixed R2 artifact overwrite/exact-candidate evaluation on `m1/candidate-artifacts`. Added unique manifest-bound candidate outputs, no-refit evaluator CLI, exit 2 for rejection, no rejected registration and propagated registration errors. 17 new tests; full non-network suite 144 passed, 1 skipped, 1 deselected; scoped Ruff passed. Protected historical model/reports retained; no real-data retraining, final-test benchmark or push. See section 6 for exact commands, fit-window change and verification limits.
 - 2026-11-26 (Step 2 - Numerical Quality Gate): Integrated main 5ac8ed0 on m1/quality-gate, preserving review/packet notes. Hardened evaluate_candidate_gate against missing/nonfinite/negative metrics, invalid baseline, empty/malformed predictions and invalid thresholds. Added tests/test_quality_gate.py (44 cases; before: 37 failed/7 passed; after focused: 53 passed; full non-network: 127 passed/1 skipped/1 deselected). Ruff passed with local tools excluded. No model retraining, final-test benchmark or Member 2 implementation.
 - 2026-11-24 (M1.10 - MLflow Lineage Tracking, Model Registry Setup, Run Resolver CLI & Test Suite Network Isolation): Resolved all cryptographic lineage gaps identified in the artifact packet audit. (1) Implemented stdlib-only provenance helper src/models/lineage.py (log_lineage) logging git commit, git dirty status, data file hashes (hourly, hrrr, qh, feast), manifest hash, feature schema version & hash, configuration hashes (evaluation.yaml, model_params.yaml), and bundle sha256; integrated into train.py, evaluate.py, deviation.py, replay_monitoring.py, and materialize.py without third-party dependencies (compatible across .venv and .venv-feast). Added unit test suite in tests/test_lineage.py (7 passed). (2) Implemented scripts/tag_existing_runs.py retroactively tagging historical runs with verified provenance tags (prefix lineage_added_later. and timestamp lineage_added_later_at): verified champion artifact bundle sha256 (f72de152727fd406ac35a08cfa83289b6a61b031e0b3f4eb52008288e3980619) exactly matches models/solarcast_f1_bundle.joblib; verified logged data hashes match current disk files; honestly tagged unlogged hashes as unverified; documented champion run working-tree state (uncommitted changes at run time committed in 0afc5c6). (3) Implemented scripts/setup_model_registry.py: tested and confirmed MLflow 2.17.2 local file store supports aliases, tags, and descriptions; set alias champion on solarcast-f1 v4; set version tags (mode=F1, feature_set=B, schema_version=1.1.0, gate_eligible=true, final_test_opened=true, bundle_sha256, source_run_id); tagged v1-v3 status=superseded; updated descriptions with factual run history; saved status to reports/model_registry_status.json. (4) Implemented scripts/resolve_run.py resolving any run ID or champion to code commit, dirty flag, data hashes, schema version/hash, bundle hash, params, and metrics, verifying each against local disk with [OK], [MISMATCH], or [NOT RECORDED]. (5) Authored docs/mlflow_lineage.md documenting lineage architecture, run audit table, tuning run comparison, and shared server migration runbook. (6) Identified tests/test_data.py::TestHRRRExtraction::test_regression_june_week_sample as making live AWS S3 network calls via s3fs; added @pytest.mark.network and registered marker in pyproject.toml. Full test suite (83 tests) passes in 33.5s with -m "not network"; ruff clean. Branch m1/lineage.
@@ -468,9 +516,10 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 
 ## 12. Next steps
-0. Artifact handoff, numerical gate validation and isolated exact-candidate checks are complete; latest main
+0. Artifact handoff, numerical gate validation, isolated exact-candidate checks and provider target-hour
+   safeguards are complete; latest main
    5ac8ed0 is integrated. Continue `docs/member1_review_20261124.md` priorities one at a time:
-   exact target-hour feature retrieval, contiguous alert handling, and remaining automation commands. Future
+   contiguous alert handling (R4), remaining automation commands, and real Feast/environment verification. Future
    promotion must separately verify the exact eligible candidate and never refit under its approval. The existing
    Member 1 handoffs are implementation guidance, not independent proof of clean-clone readiness.
 1. **Member 2 Review & Integration:**

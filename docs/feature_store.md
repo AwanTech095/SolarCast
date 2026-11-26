@@ -1,7 +1,15 @@
 # SolarCast Feast Feature Store Architecture & Operations
 
 ## 1. Purpose
-The SolarCast Feature Store provides point-in-time correct feature extraction for offline training/backtesting and low-latency online feature serving for production inference (Mode F1 next-hour solar AC energy forecasting). It guarantees zero training-serving skew by serving features from a single unified feature pipeline.
+The SolarCast Feature Store supplies features from the shared pipeline for historical replay and future
+serving (Mode F1). Target-specific rows must match the requested site and issue timestamp exactly.
+The provider checks this identity; historical parity examples below are dated evidence, not a guarantee
+for an unverified deployment or a newly configured backend.
+
+**26 November 2026 correction:** A fresh but older feature row is unsafe for another forecast hour.
+The provider now rejects this online and checks offline requests against the registered local Parquet
+source before allowing Feast's as-of join. Missing hours, including absent night rows, fail explicitly.
+No feature table, model schema or data artifact was rebuilt for this change.
 
 ## 2. Entity and Feature View Specifications
 - **Entity**: `site`
@@ -32,7 +40,8 @@ The SolarCast Feature Store provides point-in-time correct feature extraction fo
   - Operational Cadence: 1-hour issue interval.
   - Production Telemetry Latency: Nominal 15 minutes before issue time ($H - 15\text{m}$).
   - Forecast Weather Latency: Nominal 2-hour HRRR publication lag ($H - 2\text{h}$ initialization).
-  - Maximum Allowable Online Staleness: 2.0 hours.
+  - Exact feature issue-time match required. The 2.0-hour staleness setting only distinguishes stale
+    snapshots from other timestamp mismatches; it never permits reuse for a later prediction hour.
 
 ## 4. Environment Separation
 The project maintains two distinct virtual environments:
@@ -57,6 +66,20 @@ The project maintains two distinct virtual environments:
   - To prevent serving future or stale features, our wrapper inspects the underlying `event_timestamps` protobuf field returned by Feast.
   - If stored record timestamp > requested issue time: raises `FutureFeatureError` (never answering past query times with future observations).
   - If $(t_{\text{query}} - t_{\text{record}}) > \text{max\_staleness\_hours}$ (default 2.0h): raises `StaleFeatureError`.
+  - Any other difference from the requested issue time raises `TargetHourMismatchError`, including
+    a one-hour-old row within that limit. Every requested feature's timestamp and record presence is checked.
+  - Requests require timezone-aware timestamps, normalized to UTC without rounding. Missing weather
+    values remain null/NaN when the feature record itself exists for the correct hour.
+  - Offline replay reads the registered view's local, unmapped Parquet FileSource. It requires unique
+    `(site_id, event_timestamp)` source keys, exact requested rows and matching Feast-returned values.
+    The output adds `source_feature_time_utc` from the matched source record. The echoed entity timestamp
+    alone is insufficient. Unsupported sources, ambiguous keys and incomplete responses fail closed.
+  - This adapter projects the requested columns from the local source on each offline call. New remote
+    or mapped backends require their own exact-source verification; they are not implicitly supported.
+
+Registry/source APIs were checked against the pinned [Feast 0.68.0 FeatureStore source](https://github.com/feast-dev/feast/blob/v0.68.0/sdk/python/feast/feature_store.py)
+and [FileSource source](https://github.com/feast-dev/feast/blob/v0.68.0/sdk/python/feast/infra/offline_stores/file_source.py).
+This is source inspection, not a locally executed Feast integration test.
 
 ## 6. Architecture Implications for Replay & Production Serving
 - **Online Store Replay Rule**:
@@ -68,6 +91,18 @@ The project maintains two distinct virtual environments:
     2. Configure a centralized network online store backend (e.g. Redis, PostgreSQL, or DynamoDB) in `feature_store.yaml`.
 
 ## 7. Real Demonstration Results
+The following are Member 1's historical demonstrations. The 26 November correction was verified with
+deterministic fake backend responses and temporary Parquet sources in
+`tests/test_feast_provider_contract.py`. Run these without Feast in the core environment:
+
+```powershell
+.\tmp\review_env\Scripts\python -m pytest tests/test_feast_provider_contract.py -q
+```
+
+The current review machine has no isolated Feast runtime. Re-run `tests/test_feature_store.py` in the
+documented Feast environment before claiming real-backend compatibility. Night requests absent from the
+daylight-only source now fail; rebuild target-specific features explicitly if a future serving path needs them.
+
 All real-data demonstrations executed in `scripts/demo_feast.py` using `.venv-feast`:
 - **Materialization Window**:
   - Materialized interval: `2023-06-13 15:00:00+00:00` to `2023-06-15 15:00:00+00:00`.
