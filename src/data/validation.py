@@ -42,6 +42,7 @@ quarantine_schema = DataFrameSchema(
                 "above_893_kw",
                 "negative_power",
                 "non_finite",
+                "invalid_timestamp",
             ]),
             nullable=False,
         ),
@@ -148,6 +149,7 @@ def validate_and_quarantine_raw_generation(
     - Values above nameplate DC capacity (893 kW) are quarantined (reason='above_893_kw').
     - Negative power values are quarantined (reason='negative_power').
     - Non-finite or missing values are quarantined (reason='non_finite').
+    - Unparseable or offset-bearing local timestamps are quarantined.
 
     No silent clipping is performed. Quarantined records are isolated with an
     explanatory reason column and optionally written to parquet.
@@ -162,42 +164,50 @@ def validate_and_quarantine_raw_generation(
     Returns:
         Tuple of (clean_df, quarantine_df).
     """
-    df_work = df.copy()
+    missing_columns = {timestamp_col, power_col} - set(df.columns)
+    if missing_columns:
+        raise ValueError(f"Missing required raw meter columns: {sorted(missing_columns)}")
+    df_work = df.copy().reset_index(drop=True)
 
-    # Priority 1: Non-finite power
-    is_non_finite = (
-        df_work[power_col].isna()
-        | np.isinf(pd.to_numeric(df_work[power_col], errors="coerce"))
+    numeric_power = pd.to_numeric(df_work[power_col], errors="coerce").astype(float)
+    is_non_finite = ~np.isfinite(numeric_power)
+    timestamp_text = df_work[timestamp_col].astype("string")
+    local_format = timestamp_text.str.fullmatch(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}")
+    parsed = pd.to_datetime(
+        timestamp_text.where(local_format.fillna(False)).str.replace("T", " ", regex=False),
+        format="%Y-%m-%d %H:%M:%S",
+        errors="coerce",
     )
 
     # Priority 2: Negative power
-    numeric_power = pd.to_numeric(df_work[power_col], errors="coerce")
     is_negative = (~is_non_finite) & (numeric_power < 0.0)
 
     # Priority 3: Exceeds DC nameplate capacity
     is_over_capacity = (~is_non_finite) & (numeric_power > max_capacity_kw)
-
-    # Priority 4: Duplicate timestamps
-    is_duplicate = df_work[timestamp_col].duplicated(keep="first")
 
     # Construct quarantine masks with priority
     reasons = pd.Series(index=df_work.index, dtype="object")
     reasons[is_non_finite] = "non_finite"
     reasons[is_negative] = "negative_power"
     reasons[is_over_capacity] = "above_893_kw"
-    # Only label as duplicate if not already quarantined by value checks
-    reasons[is_duplicate & reasons.isna()] = "duplicate_timestamp"
+    reasons[parsed.isna() & reasons.isna()] = "invalid_timestamp"
+    # A rejected sample must not displace a valid reading for the same instant.
+    usable_times = parsed[reasons.isna()]
+    reasons.loc[usable_times.index[usable_times.duplicated()]] = "duplicate_timestamp"
 
     quarantine_mask = reasons.notna()
 
     quarantine_df = pd.DataFrame({
         "measured_on": df_work.loc[quarantine_mask, timestamp_col].astype(str),
+        "raw_power": df_work.loc[quarantine_mask, power_col].astype("string"),
         "power_kw": numeric_power.loc[quarantine_mask],
         "reason": reasons.loc[quarantine_mask],
     })
 
     clean_df = df_work.loc[~quarantine_mask].copy()
     clean_df[power_col] = numeric_power.loc[~quarantine_mask]
+    clean_df[timestamp_col] = parsed.loc[~quarantine_mask].dt.strftime("%Y-%m-%d %H:%M:%S")
+    clean_df.index = df.index[~quarantine_mask.to_numpy()]
 
     # Validate quarantine schema if any rows exist
     if not quarantine_df.empty:

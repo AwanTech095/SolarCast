@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-27 (evaluation/runbook safeguards, step 6). Update this file after every task (see AGENTS.md).
+**Last updated:** 2026-11-27 (raw meter validation, step 7). Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -17,7 +17,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.review | Independent Member 2 integration acceptance | In progress | R1-R5 code/entrypoint repairs implemented with tests. R6 raw-value quarantine, R7 latency/provenance evidence, remaining R8 assumptions and exact-environment/real Feast verification still require resolution. Future promotion/live services remain implementation work. See docs/member1_review_20261124.md. |
+| M1.review | Independent Member 2 integration acceptance | In progress | R1–R6 repairs tested. R7 P95 provenance, R8 weather availability assumptions, and environment/service verification remain. |
+| M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
 | M1.evaluation-safeguards | Explicit calibration/monitoring modes, immutable final-test protection and corrected commands (step 6) | Done (tests pass) | Bare deviation CLI does no work. Model-bound dev-only purged OOF calibration and bounded stored-record monitoring write isolated outputs. Existing final audit cannot be forced or overwritten; repository-anchored guard runs before I/O. 26 new tests; 215 core tests passed, 1 skipped, 1 deselected. No real final-test evaluation or artifact replacement. |
 | M1.alert-continuity | Consecutive-hour alerts, incremental confirmation and timing (step 5) | Done (tests pass) | Gaps/duplicates/suppressed intervals reset persistence; incremental detector emits once at second adjacent breach, stable context-based IDs, explicit label timing or null. 22 new regressions; full suite 189 passed, 1 skipped, 1 deselected. Historical performance not recomputed; durable live service not implemented. |
 | M1.exact-feature-hour | Exact issue-hour identity in online/offline retrieval (step 4) | Done (tests pass) | All online feature timestamps must match requested time; offline checks exact registered-source keys and returned values. Missing night/hour rows reject, source time returned for audit. 23 new core tests; 167 passed, 1 skipped, 1 deselected overall. Real Feast integration not run. |
@@ -121,6 +122,22 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Raw meter quarantine
+
+Missing required columns fail with a clear error. Power is coerced once, and invalid text,
+missing values and infinities use the existing `non_finite` reason. Quarantine records
+include `raw_power` alongside numeric `power_kw`. Invalid or offset-bearing timestamps
+use `invalid_timestamp` when power is otherwise valid. Local civil times retain the
+existing timezone conversion policy. Duplicate detection keeps the first usable reading.
+An end-to-end run on the supplied site 2107 meter CSV used temporary outputs and produced
+240,061 accepted readings, one quarantine row, 60,096 hourly rows and 240,384 quarter-hourly rows.
+
+```powershell
+.\tmp\review_env\Scripts\python -m pytest tests/test_raw_meter_validation.py tests/test_data.py -m "not network" -q
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q
+.\tmp\review_env\Scripts\python -m ruff check . --exclude tools
+```
 
 ### Evaluation/runbook safeguards (27 November 2026, step 6 only)
 
@@ -556,6 +573,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| 2026-11-27 | Validate raw meter fields before timezone conversion | Keep malformed samples out of aggregation and retain raw power text for audit. |
 | 2026-11-27 | Separate model-bound dev calibration from bounded monitoring; make final-test audit immutable | Remove implicit recalibration/holdout access and arbitrary champion parameters. Preserve approved artifacts and one-time evidence; new workflows use isolated outputs, actual model identity and delayed-label checks. Historical natural/final deviation readers are retired. |
 | 2026-11-26 | Require true hourly adjacency; add incremental detector without changing retrospective wrapper | Gaps/duplicates cannot confirm persistence. Keep per-site/model in-memory state across ordered batches; emit once at second breach, use stable IDs, and report unknown arrival timing as null. Frozen bounds and historical results preserved; durable monitoring remains future work. |
 | 2026-11-26 | Require exact feature issue time in both retrieval paths; verify existing registered Parquet source without schema changes | Target-specific vectors cannot be reused within a freshness window. Missing/ambiguous rows reject, source time is returned for audit, weather nulls are preserved. Real Feast integration and live process bridge remain unverified. |
@@ -592,6 +610,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- 2026-11-27 (step 7): Closed R6 with required-column checks, numeric and timestamp quarantine, and first-usable duplicate handling. Added two regression tests. Core suite 217 passed, 1 skipped, 1 deselected. Scoped Ruff passed.
 
 - 2026-11-27 (step 6): Closed R5 entrypoint/runbook bugs with immutable repository-anchored first-use final-test claims, dev-only model-recipe calibration, bounded stored-record monitoring, explicit source/model/site identity and isolated outputs. Added `src/models/deviation_workflow.py`, 26 regression/end-to-end tests, CLI help verification and restore-only historical packet metadata; updated Member 2/3 runbooks. Core suite 215 passed, 1 skipped, 1 deselected; historical artifacts preserved. No actual final-test evaluation, production recalibration, new dependency or push. See section 6 for commands and verification limits.
 
@@ -632,7 +652,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 0. Artifact handoff, numerical gate validation, isolated exact-candidate checks, provider target-hour
    safeguards and alert continuity/confirmation are complete; latest main
    5ac8ed0 is integrated. Continue `docs/member1_review_20261124.md` priorities one at a time:
-   raw-value quarantine (R6), latency/provenance evidence (R7), remaining R8 assumptions and real Feast/environment verification. Future
+   P95 provenance (R7), remaining R8 assumptions and real Feast/environment verification. Future
    promotion must separately verify the exact eligible candidate and never refit under its approval. The existing
    Member 1 handoffs are implementation guidance, not independent proof of clean-clone readiness.
 1. **Member 2 Review & Integration:**
