@@ -137,59 +137,141 @@ def evaluate_candidate_gate(
     Rules from configs/evaluation.yaml:
     1. At least 5% reduction in Daylight MAE relative to baseline champion.
     2. Capacity-normalized daylight MAE <= 20.0% (0.20).
-    3. Predictions must be strictly finite, non-negative, and <= plant DC capacity.
-    """
-    baseline_mae = float(baseline_metrics["daylight_mae_kwh"])
-    cand_mae = float(candidate_metrics["daylight_mae_kwh"])
-    cand_norm_mae = float(candidate_metrics["capacity_norm_daylight_mae"])
+    3. Predictions must be a nonempty 1D array, finite, non-negative and <= capacity.
 
-    max_allowed_mae = baseline_mae * (1.0 - (required_improvement_pct / 100.0))
-    rel_improvement = ((baseline_mae - cand_mae) / baseline_mae) * 100.0
+    Missing, nonfinite or negative error metrics reject the candidate. Relative
+    improvement requires a positive baseline MAE. Invalid policy settings raise
+    ValueError so orchestration fails instead of silently weakening the gate.
+    Invalid metric values are represented by None in the returned JSON record.
+    """
+    policy = {
+        "capacity_limit_kwh": capacity_limit_kwh,
+        "required_improvement_pct": required_improvement_pct,
+        "max_capacity_norm_mae": max_capacity_norm_mae,
+    }
+    for name, value in policy.items():
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{name} must be a finite number") from exc
+        if not np.isfinite(number):
+            raise ValueError(f"{name} must be a finite number")
+        policy[name] = number
+    capacity_limit_kwh = policy["capacity_limit_kwh"]
+    required_improvement_pct = policy["required_improvement_pct"]
+    max_capacity_norm_mae = policy["max_capacity_norm_mae"]
+    if capacity_limit_kwh <= 0:
+        raise ValueError("capacity_limit_kwh must be strictly positive")
+    if not 0 <= required_improvement_pct <= 100:
+        raise ValueError("required_improvement_pct must be between 0 and 100")
+    if max_capacity_norm_mae < 0:
+        raise ValueError("max_capacity_norm_mae must be non-negative")
 
     failure_reasons: list[str] = []
 
+    def validate_metrics(
+        metrics: dict[str, float], label: str, required: tuple[str, ...],
+    ) -> dict[str, float | None]:
+        """Validate supplied errors and retain a strict-JSON-safe audit record."""
+        checked: dict[str, float | None] = {}
+        for key in required:
+            if key not in metrics:
+                failure_reasons.append(f"Missing {label} metric: {key}")
+        for key, value in metrics.items():
+            try:
+                number = float(value)
+            except (TypeError, ValueError, OverflowError):
+                number = float("nan")
+            if not np.isfinite(number) or number < 0:
+                failure_reasons.append(
+                    f"Invalid {label} metric {key}: must be finite and non-negative"
+                )
+                checked[key] = None
+            else:
+                checked[key] = number
+        return checked
+
+    checked_baseline = validate_metrics(baseline_metrics, "baseline", ("daylight_mae_kwh",))
+    checked_candidate = validate_metrics(
+        candidate_metrics, "candidate", ("daylight_mae_kwh", "capacity_norm_daylight_mae")
+    )
+    baseline_mae = checked_baseline.get("daylight_mae_kwh")
+    cand_mae = checked_candidate.get("daylight_mae_kwh")
+    cand_norm_mae = checked_candidate.get("capacity_norm_daylight_mae")
+    if baseline_mae == 0:
+        failure_reasons.append("Baseline daylight MAE must be strictly positive")
+
+    max_allowed_mae = None
+    rel_improvement = None
+    if baseline_mae is not None and baseline_mae > 0:
+        max_allowed_mae = baseline_mae * (1.0 - required_improvement_pct / 100.0)
+        if cand_mae is not None:
+            improvement = ((baseline_mae - cand_mae) / baseline_mae) * 100.0
+            if np.isfinite(improvement):
+                rel_improvement = improvement
+            else:
+                failure_reasons.append("Relative MAE improvement is not finite")
+
     # Check 1: 5% Daylight MAE improvement
-    if cand_mae > max_allowed_mae:
+    if cand_mae is not None and max_allowed_mae is not None and cand_mae > max_allowed_mae:
+        improvement_text = f"{rel_improvement:.2f}%" if rel_improvement is not None else "unknown"
         failure_reasons.append(
-            f"Insufficient daylight MAE improvement: achieved {rel_improvement:.2f}% "
+            f"Insufficient daylight MAE improvement: achieved {improvement_text} "
             f"(target >= {required_improvement_pct:.1f}%; "
             f"candidate {cand_mae:.2f} kWh > max allowed {max_allowed_mae:.2f} kWh)"
         )
 
     # Check 2: Capacity normalized bound
-    if cand_norm_mae > max_capacity_norm_mae:
+    if cand_norm_mae is not None and cand_norm_mae > max_capacity_norm_mae:
         failure_reasons.append(
             f"Capacity-normalized daylight MAE exceeded: {cand_norm_mae * 100:.2f}% "
             f"> max allowed {max_capacity_norm_mae * 100:.1f}%"
         )
 
-    # Check 3: Finite and physical output bounds
-    preds = np.asarray(y_pred, dtype=float)
-    if not np.all(np.isfinite(preds)):
-        failure_reasons.append("Predictions contain NaN or infinite values")
-    if np.any(preds < -1e-5):
-        min_val = float(np.min(preds))
-        failure_reasons.append(f"Predictions contain negative values (min: {min_val:.4f} kWh)")
-    if np.any(preds > (capacity_limit_kwh + 1e-3)):
-        max_val = float(np.max(preds))
-        failure_reasons.append(
-            f"Predictions exceed capacity limit {capacity_limit_kwh:.1f} kWh "
-            f"(max: {max_val:.2f} kWh)"
-        )
+    # Check 3: Nonempty one-dimensional predictions and physical output bounds
+    try:
+        preds = np.asarray(y_pred, dtype=float)
+    except (TypeError, ValueError, OverflowError):
+        failure_reasons.append("Predictions must be a numeric one-dimensional array")
+    else:
+        if preds.ndim != 1 or preds.size == 0:
+            failure_reasons.append("Predictions must be a nonempty one-dimensional array")
+        else:
+            if not np.all(np.isfinite(preds)):
+                failure_reasons.append("Predictions contain NaN or infinite values")
+            if np.any(preds < -1e-5):
+                min_val = float(np.min(preds))
+                failure_reasons.append(
+                    f"Predictions contain negative values (min: {min_val:.4f} kWh)"
+                )
+            if np.any(preds > (capacity_limit_kwh + 1e-3)):
+                max_val = float(np.max(preds))
+                failure_reasons.append(
+                    f"Predictions exceed capacity limit {capacity_limit_kwh:.1f} kWh "
+                    f"(max: {max_val:.2f} kWh)"
+                )
 
     eligible = len(failure_reasons) == 0
 
     return {
         "eligible": eligible,
         "required_improvement_pct": required_improvement_pct,
-        "achieved_improvement_pct": float(np.round(rel_improvement, 2)),
+        "achieved_improvement_pct": (
+            round(rel_improvement, 2) if rel_improvement is not None else None
+        ),
         "thresholds": {
-            "max_daylight_mae_kwh": float(np.round(max_allowed_mae, 2)),
+            "max_daylight_mae_kwh": (
+                round(max_allowed_mae, 2) if max_allowed_mae is not None else None
+            ),
             "max_capacity_norm_daylight_mae": max_capacity_norm_mae,
             "capacity_limit_kwh": capacity_limit_kwh,
         },
-        "baseline_metrics": {k: float(np.round(v, 4)) for k, v in baseline_metrics.items()},
-        "candidate_metrics": {k: float(np.round(v, 4)) for k, v in candidate_metrics.items()},
+        "baseline_metrics": {
+            k: round(v, 4) if v is not None else None for k, v in checked_baseline.items()
+        },
+        "candidate_metrics": {
+            k: round(v, 4) if v is not None else None for k, v in checked_candidate.items()
+        },
         "failure_reasons": failure_reasons,
         "final_test_opened": False,
     }

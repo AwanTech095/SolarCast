@@ -2,6 +2,13 @@
 
 ## Decision
 
+**Update, 26 November 2026, step 2:** Integrated main `5ac8ed0` on `m1/quality-gate`. Fixed R2's numerical
+validation sub-issue in `evaluate_candidate_gate`: invalid/missing metrics, zero baseline and empty/malformed
+prediction evidence can no longer pass. Invalid policy settings fail explicitly; invalid result values use JSON
+null. Added 44 regression cases, demonstrating 37 failures before the fix. Afterward: 53 focused tests passed;
+full non-network suite **127 passed, 1 skipped, 1 deselected**, and scoped Ruff passed. R2's candidate artifact,
+overwrite, exact-model evaluation and promotion concerns remain open, as do the other code findings.
+
 **Update, 26 November 2026:** R1's missing-file transfer is now resolved locally. Received
 `SolarCast_packet.zip`, verified all 31 payload hashes/sizes, installed the data/model files and confirmed the
 bundle's recorded input hashes. Existing tests now report **64 passed, 2 skipped** in the Python 3.12 review
