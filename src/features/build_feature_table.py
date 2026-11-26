@@ -167,6 +167,7 @@ def generate_feature_table(
     # 7. Write to parquet
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+    table_df.attrs["feature_config"] = config
     table_df.to_parquet(out, index=False)
     print(
         f"Successfully generated Feast feature table ({len(table_df)} rows, "
@@ -185,6 +186,7 @@ def main() -> int:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT_PATH))
     parser.add_argument("--start", default=DEFAULT_START_UTC)
     parser.add_argument("--end", default=DEFAULT_END_UTC)
+    parser.add_argument("--feature-config", type=Path, help="Frozen bundle feature configuration")
     args = parser.parse_args()
 
     generate_feature_table(
@@ -194,6 +196,7 @@ def main() -> int:
         output_path=args.output,
         start_utc=args.start,
         end_utc=args.end,
+        config=load_feature_config(args.feature_config) if args.feature_config else None,
     )
     return 0
 

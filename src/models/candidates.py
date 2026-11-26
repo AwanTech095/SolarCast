@@ -135,6 +135,7 @@ def write_candidate_artifact(
         "data_hashes": bundle.data_hashes,
         "feature_schema_version": bundle.feature_schema_version,
         "feature_set": bundle.feature_set,
+        "feature_config": bundle.feature_config,
         "feature_names": bundle.feature_names,
         "training_window": bundle.training_window,
         "mlflow_run_id": bundle.mlflow_run_id,
@@ -200,6 +201,7 @@ def evaluate_candidate_artifact(manifest_path: Path | str) -> dict[str, Any]:
         bundle.feature_names != manifest["feature_names"]
         or bundle.feature_schema_version != manifest["feature_schema_version"]
         or bundle.feature_set != manifest["feature_set"]
+        or bundle.feature_config != manifest.get("feature_config")
         or bundle.mlflow_run_id != manifest["mlflow_run_id"]
         or bundle.training_window != manifest["training_window"]
         or bundle.data_hashes != manifest["data_hashes"]

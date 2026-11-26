@@ -27,7 +27,7 @@ import pandas as pd
 import yaml
 from sklearn.model_selection import TimeSeriesSplit
 
-from src.features.preprocessing import build_features
+from src.features.preprocessing import build_features, fit_clearsky_scale, load_feature_config
 from src.models.baselines import ClearSky15mPersistence
 from src.models.bundle import ModelBundle
 from src.models.candidates import write_candidate_artifact
@@ -219,7 +219,9 @@ def run_training_pipeline(
 
     mask_win = (df_h["interval_start_utc"] >= win_start) & (df_h["interval_start_utc"] <= win_end)
     valid_mask = mask_win & (df_h["quality_flag"] == "VALID")
-    valid_df = df_h[valid_mask].copy().reset_index(drop=True)
+    valid_df = df_h[valid_mask].sort_values("interval_start_utc").reset_index(drop=True)
+    if valid_df["interval_start_utc"].duplicated().any():
+        raise ValueError("Training requires unique hourly timestamps")
 
     # Strict 80/20 Chronological Split
     split_idx = int(np.floor(len(valid_df) * 0.80))
@@ -238,7 +240,13 @@ def run_training_pipeline(
     )
 
     # 3. Build Feature Matrices for Train/Dev
-    feat_cfg = {"operational_timing": {"production_available_delay_minutes": delay_min}}
+    tscv = TimeSeriesSplit(n_splits=3)
+    first_train, first_val = next(tscv.split(dev_df))
+    feat_cfg = load_feature_config()
+    feat_cfg["operational_timing"]["production_available_delay_minutes"] = delay_min
+    feat_cfg = fit_clearsky_scale(
+        dev_df.iloc[first_train], dev_df.iloc[first_val[0]]["interval_start_utc"], feat_cfg,
+    )
     print(f"Extracting Feature Set A (23 features, delay = {delay_min} min)...")
     feats_dev_a = build_features(
         dev_df["interval_start_utc"],
@@ -270,9 +278,10 @@ def run_training_pipeline(
     tune_b = tune_models(dev_full_b, params_config_path=params_config_path, feature_set="B")
 
     # 5. Cross-Validation on Identical 3 Folds
-    tscv = TimeSeriesSplit(n_splits=3)
     seed = int(params_cfg.get("random_seed", 42))
-    baseline_model = ClearSky15mPersistence(delay_minutes=delay_min)
+    baseline_model = ClearSky15mPersistence(
+        delay_minutes=delay_min, p95_ratio=feat_cfg["p95_clearsky_ratio"],
+    )
 
     models_to_benchmark = {
         "Baseline_Champion": {
@@ -494,6 +503,7 @@ def run_training_pipeline(
     bundle = ModelBundle(
         estimator=final_model,
         feature_names=selected_cols,
+        feature_config=feat_cfg,
         training_window={
             "start_utc": str(fitted_rows["interval_start_utc"].min()),
             "end_utc": str(fitted_rows["interval_start_utc"].max()),

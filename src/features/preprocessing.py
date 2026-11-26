@@ -45,6 +45,42 @@ def load_feature_config(config_path: Path | str | None = None) -> dict[str, Any]
     }
 
 
+def fit_clearsky_scale(
+    training: pd.DataFrame, validation_start: pd.Timestamp, config: dict[str, Any],
+) -> dict[str, Any]:
+    """Fit one scale from high-sun labels available before the first validation issue."""
+    delay = config["operational_timing"]["production_available_delay_minutes"]
+    times = pd.DatetimeIndex(training["interval_start_utc"])
+    eligible = (times + pd.Timedelta(hours=1, minutes=delay) <= validation_start)
+    rows = training.loc[eligible & training["quality_flag"].eq("VALID").to_numpy()]
+    midpoint = pd.DatetimeIndex(rows["interval_start_utc"]) + pd.Timedelta(minutes=30)
+    location = pvlib.location.Location(
+        config["latitude"], config["longitude"], altitude=config["elevation_m"],
+    )
+    elevation = location.get_solarposition(midpoint)["elevation"].to_numpy()
+    ghi = location.get_clearsky(midpoint)["ghi"].to_numpy()
+    target = rows["target_kwh"].to_numpy(dtype=float)
+    mask = (elevation > 5) & (ghi > 0) & np.isfinite(target) & (target >= 0)
+    ratios = target[mask] / ghi[mask]
+    if not len(ratios):
+        raise ValueError("No eligible high-sun training labels for clear-sky calibration")
+    scale = float(np.quantile(ratios, 0.95))
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Clear-sky calibration requires a finite positive P95")
+    used = rows.loc[mask, "interval_start_utc"]
+    return {
+        **config,
+        "p95_clearsky_ratio": scale,
+        "clearsky_scale_provenance": {
+            "method": "training_prefix_p95",
+            "first_validation_issue_utc": validation_start.isoformat(),
+            "first_sample_utc": used.min().isoformat(),
+            "last_sample_utc": used.max().isoformat(),
+            "sample_count": len(ratios),
+        },
+    }
+
+
 def get_feature_names(
     feature_set: str = "A",
     schema_path: Path | str | None = None,

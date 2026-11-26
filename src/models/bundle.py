@@ -36,6 +36,15 @@ class ModelBundle:
     feature_set: str = "A"
     needs_weather: bool = False
     created_at_utc: str = ""
+    feature_config: dict[str, Any] | None = None
+
+    def build_features(self, issue_times_utc: Any, **sources: Any) -> pd.DataFrame:
+        """Build inference inputs using this release's frozen feature configuration."""
+        from src.features.preprocessing import build_features
+
+        return build_features(
+            issue_times_utc, config=self.feature_config, feature_set=self.feature_set, **sources,
+        )
 
     def __post_init__(self) -> None:
         if not self.created_at_utc:

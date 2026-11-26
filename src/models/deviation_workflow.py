@@ -44,6 +44,10 @@ def compute_residuals(
     if file_sha256(Path(hourly_path)) != bundle.data_hashes.get("hourly_parquet"):
         raise ValueError("Hourly data hash does not match supplied model lineage")
     hourly, features = pd.read_parquet(hourly_path), pd.read_parquet(features_path)
+    if bundle.feature_config is not None and features.attrs.get("feature_config") != (
+        bundle.feature_config
+    ):
+        raise ValueError("Feature table must use the bundle's frozen feature configuration")
     site = str(config["site_id"])
     for frame, timestamp_column in ((hourly, "interval_start_utc"), (features, "event_timestamp")):
         frame[timestamp_column] = pd.DatetimeIndex(
