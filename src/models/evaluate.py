@@ -935,13 +935,17 @@ def run_final_test_evaluation(
 
 
 def main() -> int:
-    """CLI entrypoint for running evaluation or final test."""
+    """Check a saved candidate, or explicitly run a separate research benchmark."""
     parser = argparse.ArgumentParser(description="SolarCast Evaluation & Final Test Runner")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--dry-run",
         action="store_true",
-        help="Run end-to-end evaluation on the last validation fold (Fold 3, strictly Train/Dev)",
+        help="Refit research benchmark on development Fold 3; NOT a saved-artifact release gate",
+    )
+    group.add_argument(
+        "--candidate-manifest", type=Path,
+        help="Verify and score the exact saved candidate without refitting or opening final test",
     )
     group.add_argument(
         "--final-test",
@@ -967,6 +971,14 @@ def main() -> int:
     parser.add_argument("--reports-dir", default=str(DEFAULT_REPORTS_DIR))
 
     args = parser.parse_args()
+    if args.candidate_manifest is not None:
+        if args.force or args.reason:
+            parser.error("Candidate validation does not accept final-test authorization flags")
+        from src.models.candidates import evaluate_candidate_artifact
+
+        result = evaluate_candidate_artifact(args.candidate_manifest)
+        print(json.dumps(result, indent=2, allow_nan=False))
+        return 0 if result["eligible"] is True else 2
     mode = "final_test" if args.final_test else "dry_run"
 
     run_final_test_evaluation(

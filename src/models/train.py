@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -28,12 +29,12 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from src.features.preprocessing import build_features
 from src.models.baselines import ClearSky15mPersistence
-from src.models.bundle import ModelBundle, save_bundle
+from src.models.bundle import ModelBundle
+from src.models.candidates import write_candidate_artifact
 from src.models.evaluate import (
     compute_evaluation_metrics,
     compute_monthly_daylight_mae,
     evaluate_candidate_gate,
-    write_evaluation_json,
 )
 from src.models.lineage import log_lineage
 from src.models.tune import (
@@ -417,7 +418,8 @@ def run_training_pipeline(
 
     # 6. Model Selection Rule: Set A vs Set B
     diff_mae = hgb_a_metrics["daylight_mae_kwh"] - hgb_b_metrics["daylight_mae_kwh"]
-    diff_mae_pct = (diff_mae / hgb_a_metrics["daylight_mae_kwh"]) * 100.0
+    a_error = hgb_a_metrics["daylight_mae_kwh"]
+    diff_mae_pct = (diff_mae / a_error) * 100.0 if a_error > 0 else 0.0
 
     n_pri = primary_mask.sum()
     n_tot = daylight_concat.sum()
@@ -463,46 +465,38 @@ def run_training_pipeline(
     gate_eval["candidate_model_name"] = best_candidate_name
     gate_eval["baseline_champion_name"] = BASELINE_CHAMPION_NAME
 
-    # Write evaluation.json
-    eval_json_path = rep_dir / "evaluation.json"
-    write_evaluation_json(gate_eval, eval_json_path)
-    write_evaluation_json(gate_eval, Path("evaluation.json"))
+    # CV evidence is selection evidence, not a score for different full-dev weights.
+    cv_gate = gate_eval
     print(f"\nCandidate Gate Status: {'ELIGIBLE' if gate_eval['eligible'] else 'REJECTED'}")
     impr_pct = gate_eval["achieved_improvement_pct"]
-    print(f"  Improvement over Baseline Champion: {impr_pct:.2f}% (Threshold >= 5.0%)")
+    print(f"  Improvement over Baseline Champion: {impr_pct}% (Threshold >= 5.0%)")
 
-    # 8. Train Final Champion Model on complete Train/Dev dataset (VALID daylight hours)
-    print(f"\nTraining final {best_candidate_name} on complete Train/Dev dataset...")
+    # Freeze before Fold 3 so the exact serialized model has later validation data.
+    # Selection used these development folds; this is not an unbiased final-test claim.
+    train_idx, val_idx = list(tscv.split(dev_df))[-1]
+    validation = selected_dev_df.iloc[val_idx].copy()
+    training = selected_dev_df.iloc[train_idx].copy()
+    label_available = training["interval_start_utc"] + pd.Timedelta(hours=1, minutes=delay_min)
+    training = training[label_available <= validation["interval_start_utc"].min()]
+    print(f"\nTraining frozen {best_candidate_name} before development Fold 3...")
     full_day_mask = (
-        (selected_dev_df["quality_flag"] == "VALID")
-        & (selected_dev_df["solar_elevation_target_deg"] > 0)
+        (training["quality_flag"] == "VALID")
+        & (training["solar_elevation_target_deg"] > 0)
     )
-    if "SUSPECT_ZERO" in selected_dev_df["quality_flag"].values:
-        full_day_mask = full_day_mask & (selected_dev_df["quality_flag"] != "SUSPECT_ZERO")
-
-    X_full_train = selected_dev_df.loc[full_day_mask, selected_cols].values
-    y_full_train = selected_dev_df.loc[full_day_mask, "target_kwh"].values
+    fitted_rows = training.loc[full_day_mask]
+    X_full_train = fitted_rows[selected_cols].values
+    y_full_train = fitted_rows["target_kwh"].values
 
     final_model = best_candidate["factory"]()
     final_model.fit(X_full_train, y_full_train)
-
-    # 9. Generate Diagnostic Plots
-    plots = generate_evaluation_plots(
-        y_true_all=best_candidate["y_true"],
-        y_pred_all=best_candidate["y_pred"],
-        timestamps_all=best_candidate["timestamps"],
-        is_daylight_all=best_candidate["is_daylight"],
-        output_dir=DEFAULT_PLOTS_DIR,
-        model_name=best_candidate_name,
-    )
 
     # 10. Save Model Bundle
     bundle = ModelBundle(
         estimator=final_model,
         feature_names=selected_cols,
         training_window={
-            "start_utc": str(t_dev_start),
-            "end_utc": str(t_dev_end),
+            "start_utc": str(fitted_rows["interval_start_utc"].min()),
+            "end_utc": str(fitted_rows["interval_start_utc"].max()),
             "training_samples": str(len(y_full_train)),
         },
         data_hashes=data_hashes,
@@ -513,9 +507,20 @@ def run_training_pipeline(
         feature_set=selected_feature_set,
         needs_weather=(selected_feature_set == "B"),
     )
-    bundle_path = mod_dir / "solarcast_f1_bundle.joblib"
-    save_bundle(bundle, bundle_path)
-    print(f"Model bundle saved to {bundle_path}")
+    snapshot = validation[selected_cols].copy()
+    snapshot["issue_time_utc"] = validation["interval_start_utc"]
+    snapshot["target_kwh"] = validation["target_kwh"]
+    snapshot["baseline_prediction_kwh"] = baseline_model.predict(dev_full_b.iloc[val_idx])
+    snapshot["evaluation_daylight"] = (
+        (validation["solar_elevation_target_deg"] > 0)
+        & (dev_full_b.iloc[val_idx]["weather_missing"] == 0)
+    )
+    config_hashes = {
+        "evaluation": compute_file_sha256(eval_config_path),
+        "model_params": compute_file_sha256(params_config_path),
+        "feature_schema": compute_file_sha256(DEFAULT_SCHEMA_CONFIG),
+        "features": compute_file_sha256("configs/features.yaml"),
+    }
 
     # 11. MLflow Tracking & Artifact Logging
     if tracking_uri is None:
@@ -525,7 +530,6 @@ def run_training_pipeline(
     mlflow.set_experiment(experiment_name)
 
     training_duration = time.time() - start_time
-    status_tag = "candidate" if gate_eval["eligible"] else "rejected"
 
     for name, rec in benchmark_records.items():
         if rec.get("feature_set") == "Baseline":
@@ -533,12 +537,12 @@ def run_training_pipeline(
         run_name = f"{name}_15mDelay"
         with mlflow.start_run(run_name=run_name) as run:
             run_id = run.info.run_id
-            log_lineage(run)
+            log_lineage(run, extra_tags={"status": "benchmark", "deployment_approved": "false"})
             improvement = float(
                 (base_metrics["daylight_mae_kwh"] - rec["metrics"]["daylight_mae_kwh"])
                 / base_metrics["daylight_mae_kwh"]
                 * 100.0
-            )
+            ) if base_metrics["daylight_mae_kwh"] > 0 else 0.0
             mlflow.log_params({
                 "model_type": rec["type"],
                 "feature_set": rec["feature_set"],
@@ -558,37 +562,71 @@ def run_training_pipeline(
                 "data_hash_qh": data_hashes["quarter_hourly_parquet"],
                 "data_hash_hrrr": data_hashes["hrrr_forecast_features_parquet"],
                 "feature_schema_version": feature_schema_version,
-                "status": status_tag if name == best_candidate_name else "rejected",
+                "status": "benchmark",
                 "is_best_candidate": str(name == best_candidate_name),
             })
 
             # If best candidate, log plots, evaluation.json, and bundle
             if name == best_candidate_name:
                 bundle.mlflow_run_id = run_id
-                save_bundle(bundle, bundle_path)
-                log_lineage(run)
-
+                manifest_path = write_candidate_artifact(
+                    bundle, snapshot, cv_gate, mod_dir / "candidates", str(t_test_start),
+                    git_commit, production_delay_minutes=delay_min, config_hashes=config_hashes,
+                )
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                bundle_path = manifest_path.parent / manifest["bundle_file"]
+                eval_json_path = manifest_path.parent / manifest["evaluation_file"]
+                gate_eval = json.loads(eval_json_path.read_text(encoding="utf-8"))
+                log_lineage(run, extra_tags={
+                    "bundle_sha256": manifest["bundle_sha256"],
+                    "candidate_id": manifest["candidate_id"],
+                    "status": manifest["status"], "deployment_approved": "false",
+                })
+                # Keep saved-weight scores distinct from pooled CV selection scores.
+                mlflow.log_metrics({
+                    f"candidate_{key}": value
+                    for key, value in gate_eval["candidate_metrics"].items()
+                    if value is not None
+                })
+                mlflow.set_tags({
+                    "gate_eligible": str(gate_eval["eligible"]).lower(),
+                    "candidate_validation_scope": gate_eval["validation_scope"],
+                })
+                plots = generate_evaluation_plots(
+                    y_true_all=snapshot["target_kwh"].to_numpy(),
+                    y_pred_all=bundle.predict(snapshot[selected_cols]),
+                    timestamps_all=pd.DatetimeIndex(snapshot["issue_time_utc"]),
+                    is_daylight_all=snapshot["evaluation_daylight"].to_numpy(),
+                    output_dir=rep_dir / "candidates" / manifest["candidate_id"] / "plots",
+                    model_name=best_candidate_name,
+                )
                 for _p_name, p_file in plots.items():
                     mlflow.log_artifact(str(p_file), artifact_path="plots")
                 mlflow.log_artifact(str(eval_json_path), artifact_path="evaluation")
                 mlflow.log_artifact(str(bundle_path), artifact_path="bundle")
-
-                try:
+                mlflow.log_artifact(str(manifest_path), artifact_path="candidate")
+                mlflow.log_artifact(
+                    str(manifest_path.parent / manifest["validation_file"]),
+                    artifact_path="candidate",
+                )
+                # Register eligible experiments only; no champion alias or serving file changes.
+                # Failures must propagate so automation cannot report a successful registration.
+                if gate_eval["eligible"]:
                     mlflow.sklearn.log_model(
                         final_model,
                         artifact_path="model",
                         registered_model_name="solarcast-f1",
                     )
-                except Exception as reg_err:
-                    print(f"MLflow model registration notice: {reg_err}")
 
     return {
         "best_candidate_name": best_candidate_name,
         "selected_feature_set": selected_feature_set,
-        "best_candidate_metrics": best_candidate["metrics"],
+        "cross_validation_metrics": best_candidate["metrics"],
+        "best_candidate_metrics": gate_eval["candidate_metrics"],
         "gate_evaluation": gate_eval,
         "benchmark_records": benchmark_records,
         "bundle_path": str(bundle_path),
+        "candidate_manifest_path": str(manifest_path),
         "evaluation_json_path": str(eval_json_path),
         "training_duration_sec": training_duration,
         "data_hashes": data_hashes,
@@ -607,7 +645,7 @@ def main() -> int:
     parser.add_argument("--models-dir", default=str(DEFAULT_MODELS_DIR))
     args = parser.parse_args()
 
-    run_training_pipeline(
+    result = run_training_pipeline(
         eval_config_path=args.eval_config,
         params_config_path=args.params_config,
         hourly_path=args.hourly,
@@ -616,7 +654,8 @@ def main() -> int:
         reports_dir=args.reports_dir,
         models_dir=args.models_dir,
     )
-    return 0
+    print(f"Candidate manifest: {result.get('candidate_manifest_path', 'not written')}")
+    return 0 if result["gate_evaluation"]["eligible"] is True else 2
 
 
 if __name__ == "__main__":

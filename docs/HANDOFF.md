@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-26 (quality-gate validation fix, step 2). Update this file after every task (see AGENTS.md).
+**Last updated:** 2026-11-26 (isolated candidate artifacts, step 3). Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -17,7 +17,8 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 ## 2. Status board
 | ID | Item | Status | Notes |
 |---|---|---|---|
-| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer verified and latest main 5ac8ed0 integrated. Numerical quality-gate validation fixed; candidate artifact/promotion controls, feature-time/alert fixes and exact-environment verification remain. See docs/member1_review_20261124.md. |
+| M1.review | Independent Member 2 integration acceptance | In progress | Artifact transfer verified and latest main 5ac8ed0 integrated. Numerical gate and isolated exact-candidate checks fixed. Feature-time/alert fixes, future promotion integration and exact-environment verification remain. See docs/member1_review_20261124.md. |
+| M1.candidate-artifacts | Isolate candidate outputs and evaluate saved weights (step 3) | Done (tests pass) | Unique candidate directories, SHA-256 manifest, reloaded-model development validation, rejected exit 2, no rejected registration or approved-file overwrite. 17 new regression cases; full non-network suite 144 passed, 1 skipped, 1 deselected. No real-data retraining or deployment. |
 | M1.packet | Receive and verify artifact packet (step 1) | Done (tests pass) | SolarCast_packet.zip: 31 payload hashes/sizes verified; 28 missing data/model files installed; three existing config/report copies match. Bundle data hashes and MLflow run ID checked; 64 tests passed, 2 skipped under the existing Python 3.12 review runtime. Separate Feast/Python 3.11 and bug fixes remain. Receipt: reports/packet_receipt_20261126.json. |
 | M1.gate-validation | Fail-closed numerical quality gate (step 2) | Done (tests pass) | Confirmed latest main still accepted NaN metrics. Fixed evaluate_candidate_gate and added 44 regression cases: missing/nonfinite/negative metrics, zero baseline, invalid/empty predictions, invalid policy and exact threshold behavior. Full non-network suite: 127 passed, 1 skipped, 1 deselected; Ruff passed with local tools excluded. Does not complete candidate artifact/promotion integration. |
 | M1.0 | Repo + environment setup | Done (tests pass) | Scaffold created on branch m1/scaffold; Member 1 folder layout, .gitkeep, __init__.py, pyproject.toml, .env.example, pinned requirements.txt, and tests passing (pytest & ruff clean) |
@@ -117,6 +118,50 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Isolated candidate artifacts (26 November 2026, step 3 only)
+
+Branch: `m1/candidate-artifacts`. Synthetic regression tests first confirmed approved-file overwrites and
+rejected CLI success (3 failed, 1 passed). The corrected training pipeline writes only new candidate outputs:
+
+- `models/candidates/<candidate-id>/bundle.joblib`, `validation.parquet`, `evaluation.json`, `manifest.json`.
+- `reports/candidates/<candidate-id>/plots/` for that exact candidate's diagnostics.
+- The manifest binds model/validation/evaluation SHA-256 hashes, code revision, config/data hashes, feature
+  metadata, training window and MLflow run ID. It always says `deployment_approved: false`.
+- Rechecking reloads the saved bundle and uses `predict`, never `fit`. Changed/missing files, inappropriate
+  chronology, failed CV or failed exact-model metrics prevent eligibility. A manifest is integrity evidence
+  from a trusted run, not a cryptographic signature or independent proof of data provenance.
+- Training/evaluation CLI exit `0` means eligible, `2` means rejected; exceptions fail nonzero. Rejected
+  candidates may be logged but are not registered. Registration errors propagate. No champion alias or
+  approved serving file is changed, including for passing candidates. Promotion remains future work.
+
+To obtain honest validation of the distributed weights without reopening the already-used final test,
+future candidates are fitted only on the training side of the last development fold. Rows whose hourly
+labels plus reporting delay are unavailable at validation start are excluded. The frozen model is scored
+on development Fold 3. CV selection already uses this fold, so this is development evidence, **not a new
+unbiased test estimate**. Unlike the supplied historical full-dev model, new candidates stop before Fold 3;
+refitting on all development rows creates different weights and invalidates that candidate's gate evidence.
+The historical weather-present daylight mask and quality thresholds are retained in this step.
+
+```powershell
+# Verified here using synthetic candidate training and mocked MLflow (no production retraining).
+$env:PYTHONPATH=''
+.\tmp\review_env\Scripts\python -m pytest tests/test_candidate_artifacts.py -q
+.\tmp\review_env\Scripts\python -m pytest -m "not network" -q --tb=short
+.\tmp\review_env\Scripts\python -m ruff check . --exclude tools
+
+# Future approved training run: prints its unique manifest path; it does not deploy.
+.\.venv\Scripts\python -m src.models.train
+# Use the actual manifest path from that run. Do not use the historical root evaluation.json.
+.\.venv\Scripts\python -m src.models.evaluate --candidate-manifest "models/candidates/<candidate-id>/manifest.json"
+```
+
+Full suite: **144 passed, 1 skipped (Feast unavailable), 1 deselected (network)**; scoped Ruff passed.
+Log: `tmp/candidate_artifacts_tests.txt`. Python is still the temporary 3.12.5 review runtime; clean 3.11,
+separate Feast and an actual shared MLflow registry were not verified. The existing approved bundle and
+three historical evaluation/audit files match their packet receipt hashes. No real-data model was retrained,
+no final-test benchmark was run and no GitHub push or Member 2 infrastructure was performed.
+Next priority is exact target-hour feature retrieval (R4); stop here until the owner requests that step.
 
 ### Quality-gate validation fix (26 November 2026, step 2 only)
 
@@ -359,6 +404,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| 2026-11-26 | Isolate future candidates and bind eligibility to saved weights; no automatic promotion | Prevent rejected runs from overwriting approved artifacts. Frozen fits stop before last development fold with label-availability purge; exact bundle is reloaded and scored. Existing full-dev model and historical results remain unchanged. |
 |---|---|---|
 | 2026-11-26 | Step 2: reject invalid numerical gate evidence and invalid policy; preserve valid decisions | Added 44 regression cases, reproduced 37 failures on latest main, then passed focused and full suites. Invalid values become null in rejection records. Candidate artifact/promotion safeguards remain a separate task; no retraining/final-test benchmark. |
 | 2026-11-24 | Standalone Artifact Packet, Checksum Verification & Read-Only MLflow Lineage Audit | Packaged 31 verified data, model, and convenience files to D:\SolarCast_packet (26.81 MB uncompressed) and created D:\SolarCast_packet.zip (12.91 MB, sha256 93504e87d870e7881235d3de1fbedbff712492ae567abb05107af5536e797e21). Excluded hrrr_parts/ and exploratory samples june_week_extracted / mixed_week_extracted. Excluded mlruns/ due to absolute Windows file URIs breaking cross-machine portability (runs will be re-logged to the shared server by running python -m src.models.train once tracking URI exists). Generated CHECKSUMS.sha256, PACKET_MANIFEST.json mapping each file to its pipeline generation command, and performed read-only MLflow lineage audit across the champion run, registered model solarcast-f1 v1-v4 (confirming v4 is champion, stages/aliases unset in local store), and operational runs without modifying any runs or results. Built scripts/verify_artifact_packet.py, verified on the packet, and tested deliberate 1-byte corruption asserting detection and abort. |
@@ -391,6 +437,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- 2026-11-26 (step 3): Fixed R2 artifact overwrite/exact-candidate evaluation on `m1/candidate-artifacts`. Added unique manifest-bound candidate outputs, no-refit evaluator CLI, exit 2 for rejection, no rejected registration and propagated registration errors. 17 new tests; full non-network suite 144 passed, 1 skipped, 1 deselected; scoped Ruff passed. Protected historical model/reports retained; no real-data retraining, final-test benchmark or push. See section 6 for exact commands, fit-window change and verification limits.
 - 2026-11-26 (Step 2 - Numerical Quality Gate): Integrated main 5ac8ed0 on m1/quality-gate, preserving review/packet notes. Hardened evaluate_candidate_gate against missing/nonfinite/negative metrics, invalid baseline, empty/malformed predictions and invalid thresholds. Added tests/test_quality_gate.py (44 cases; before: 37 failed/7 passed; after focused: 53 passed; full non-network: 127 passed/1 skipped/1 deselected). Ruff passed with local tools excluded. No model retraining, final-test benchmark or Member 2 implementation.
 - 2026-11-24 (M1.10 - MLflow Lineage Tracking, Model Registry Setup, Run Resolver CLI & Test Suite Network Isolation): Resolved all cryptographic lineage gaps identified in the artifact packet audit. (1) Implemented stdlib-only provenance helper src/models/lineage.py (log_lineage) logging git commit, git dirty status, data file hashes (hourly, hrrr, qh, feast), manifest hash, feature schema version & hash, configuration hashes (evaluation.yaml, model_params.yaml), and bundle sha256; integrated into train.py, evaluate.py, deviation.py, replay_monitoring.py, and materialize.py without third-party dependencies (compatible across .venv and .venv-feast). Added unit test suite in tests/test_lineage.py (7 passed). (2) Implemented scripts/tag_existing_runs.py retroactively tagging historical runs with verified provenance tags (prefix lineage_added_later. and timestamp lineage_added_later_at): verified champion artifact bundle sha256 (f72de152727fd406ac35a08cfa83289b6a61b031e0b3f4eb52008288e3980619) exactly matches models/solarcast_f1_bundle.joblib; verified logged data hashes match current disk files; honestly tagged unlogged hashes as unverified; documented champion run working-tree state (uncommitted changes at run time committed in 0afc5c6). (3) Implemented scripts/setup_model_registry.py: tested and confirmed MLflow 2.17.2 local file store supports aliases, tags, and descriptions; set alias champion on solarcast-f1 v4; set version tags (mode=F1, feature_set=B, schema_version=1.1.0, gate_eligible=true, final_test_opened=true, bundle_sha256, source_run_id); tagged v1-v3 status=superseded; updated descriptions with factual run history; saved status to reports/model_registry_status.json. (4) Implemented scripts/resolve_run.py resolving any run ID or champion to code commit, dirty flag, data hashes, schema version/hash, bundle hash, params, and metrics, verifying each against local disk with [OK], [MISMATCH], or [NOT RECORDED]. (5) Authored docs/mlflow_lineage.md documenting lineage architecture, run audit table, tuning run comparison, and shared server migration runbook. (6) Identified tests/test_data.py::TestHRRRExtraction::test_regression_june_week_sample as making live AWS S3 network calls via s3fs; added @pytest.mark.network and registered marker in pyproject.toml. Full test suite (83 tests) passes in 33.5s with -m "not network"; ruff clean. Branch m1/lineage.
 - 2026-11-24 (M1.9 - Artifact Packet Generation, Verification CLI, Lineage Audit & Zip Archive): Implemented scripts/make_artifact_packet.py and scripts/verify_artifact_packet.py. Generated D:\SolarCast_packet containing 31 payload files (28,116,883 bytes, ~26.81 MB) preserving relative directory structure. Generated CHECKSUMS.sha256 and PACKET_MANIFEST.json with pipeline commands from docs/handoff_member2.md, git facts (commit, branch), python 3.11.9 and 20 key package versions, and local MLflow tracking facts. Conducted read-only MLflow lineage audit across champion run (f7fef3f7bdf241c5a53dc50d8e4713f9), solarcast-f1 registered versions (v1-v4, v4 champion), final_test_evaluation, deviation_detector, monitoring_replay, and feature_store_materialization. Created D:\SolarCast_packet.zip (13,535,820 bytes, ~12.91 MB, sha256 93504e87d870e7881235d3de1fbedbff712492ae567abb05107af5536e797e21). Verified integrity with scripts/verify_artifact_packet.py and verified that a deliberately corrupted copy fails with exit code 1. Updated docs/handoff_member2.md and docs/HANDOFF.md. All 77 unit tests pass; ruff clean. Branch m1/packet.
@@ -420,9 +468,10 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 - 2026-11-13: File created. Sources reviewed. No code written yet.
 
 ## 12. Next steps
-0. Artifact handoff and numerical gate validation are complete; latest main 5ac8ed0 is integrated. Continue
-   `docs/member1_review_20261124.md` priorities one at a time: exact candidate artifact/promotion safeguards,
-   exact target-hour feature retrieval, contiguous alert handling, and correct automation commands. The existing
+0. Artifact handoff, numerical gate validation and isolated exact-candidate checks are complete; latest main
+   5ac8ed0 is integrated. Continue `docs/member1_review_20261124.md` priorities one at a time:
+   exact target-hour feature retrieval, contiguous alert handling, and remaining automation commands. Future
+   promotion must separately verify the exact eligible candidate and never refit under its approval. The existing
    Member 1 handoffs are implementation guidance, not independent proof of clean-clone readiness.
 1. **Member 2 Review & Integration:**
    - Review `docs/handoff_member2.md` and verify DVC tracking tables and clean-clone checklist.

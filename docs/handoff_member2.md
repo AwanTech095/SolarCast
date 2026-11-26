@@ -132,7 +132,11 @@ cd ../..
 ---
 
 ### 2.6 Step 6: Model Training, Cross-Validation Benchmarking & Bundling
-Trains baseline models, tunes Ridge Regression and `HistGradientBoostingRegressor` over 3 expanding-window chronological cross-validation folds on the 80% Train/Dev partition (37,090 hours), evaluates the candidate acceptance gate, fits the champion model on all valid daylight training hours, logs lineage to MLflow, and packages `models/solarcast_f1_bundle.joblib`.
+Tunes Ridge and HistGradientBoosting over 3 expanding development folds, selects Set A or B, then fits
+a frozen candidate before development Fold 3. Training labels must have arrived before validation starts.
+The saved bundle is reloaded and evaluated on that later development fold. Selection used these folds:
+this is development validation, not a new independent final test. The supplied historical full-dev champion
+is preserved. A new full-dev refit would require its own later validation and cannot reuse this gate.
 
 ```powershell
 # Model training pipeline (main .venv)
@@ -147,9 +151,16 @@ Trains baseline models, tunes Ridge Regression and `HistGradientBoostingRegresso
   - `--reports-dir <path>`: Output directory for reports and plots (default: `reports/`).
   - `--models-dir <path>`: Output directory for joblib model bundle (default: `models/`).
 - **Exit Codes & Failure Behavior**:
-  - `0`: Training and cross-validation completed. If candidate gate fails, sets `status="rejected"` and `eligible=false` in `evaluation.json`, but exits cleanly without crashing.
-  - `1`: Missing input datasets or corrupted parquets.
-- **Idempotency**: Deterministic given fixed random seed (`random_seed: 42`). Overwrites `reports/evaluation.json`, `./evaluation.json`, diagnostic plots in `reports/plots/`, and `models/solarcast_f1_bundle.joblib`.
+  - `0`: Both cross-validation and saved-candidate gates passed. This does not approve deployment.
+  - `2`: Candidate rejected. Archive/log it, stop the release path; do not retry until accepted by chance.
+  - Other nonzero: Exception such as missing input, invalid evidence or MLflow registration failure.
+- **Outputs**: Each run prints `models/candidates/<candidate-id>/manifest.json`; the directory also contains
+  `bundle.joblib`, `validation.parquet` and `evaluation.json`. Plots go to
+  `reports/candidates/<candidate-id>/plots/`. Every run has a fresh ID. Root historical evaluation/audit
+  files and `models/solarcast_f1_bundle.joblib` are never overwritten. Keep candidate artifacts outside Git.
+- **Registry**: Only eligible candidates are registered. No champion alias is moved. The distributable
+  serving artifact is the hash-bound bundle (with feature ordering, clipping and nighttime behavior), not
+  the bare sklearn estimator. Promotion is not implemented; `deployment_approved` remains false.
 
 ---
 
@@ -175,18 +186,23 @@ Calibrates 1st and 99th percentile residual thresholds across out-of-sample vali
 
 ---
 
-### 2.8 Step 8: Evaluation Dry-Run (Automated CI Benchmark)
-Evaluates all baselines and champion models strictly on Fold 3 of Train/Dev. This command must be used by automated CI pipelines to verify model performance without touching the sealed final test partition.
+### 2.8 Step 8: Verify the Saved Candidate (Automation Gate)
+Use the manifest printed by training. The checker verifies model/validation/evaluation hashes and chronology,
+loads the saved bundle, predicts without refitting, and checks the recomputed result against the saved gate.
+Both CV and exact-candidate gates must pass. Changed or missing evidence fails closed. The manifest records
+code/config/data/feature metadata and MLflow run identity; it is not a signed provenance certificate.
 
 ```powershell
-# CI benchmark dry run (main .venv)
-.\.venv\Scripts\python -m src.models.evaluate --dry-run --reports-dir reports
+# Replace <candidate-id> with the actual ID from this training run (main .venv).
+.\.venv\Scripts\python -m src.models.evaluate --candidate-manifest "models/candidates/<candidate-id>/manifest.json"
 ```
 - **CLI Flags**:
-  - `--dry-run`: Evaluates Fold 3 within Train/Dev partition (`final_test_opened: false`).
-  - `--reports-dir <path>`: Destination for `dry_run_last_fold_summary.json` (default: `reports/`).
+  - `--candidate-manifest <path>`: Required for this saved-artifact gate. No final-test access or refit.
 - **Exit Codes**:
-  - `0`: Evaluation finished, summary written, logged to MLflow as `dry_run_last_fold_evaluation`.
+  - `0`: Eligible saved candidate. `2`: Rejected candidate. Exceptions fail nonzero.
+
+The legacy `--dry-run` remains a separate research benchmark that refits fixed-parameter models. Its exit
+status and metrics cannot approve a saved candidate; do not use it as the retraining/release gate.
 
 ---
 
@@ -275,7 +291,12 @@ The MLflow Model Registry (`solarcast-f1`) is configured on the local file store
 
 ## 5. `evaluation.json` Schema & Acceptance Gate Semantics
 
-The evaluation gate result is recorded in `evaluation.json` and `reports/evaluation.json`.
+For new runs use `models/candidates/<candidate-id>/evaluation.json`, bound by that run's manifest. Root
+`evaluation.json` and `reports/evaluation.json` are historical records. The examples below describe that
+historical champion, not promised scores for future candidates. New results also include `candidate_id`,
+`bundle_sha256`, `validation_sha256`, `validation_scope`, `validation_window` and `cross_validation_gate`.
+Unknown metrics/improvements use JSON null and reject eligibility. Both the stored CV gate and the exact
+frozen candidate's development metrics must pass the unchanged numerical thresholds.
 
 ### 5.1 JSON Field Definitions
 - `eligible` (`bool`): `true` if candidate meets all acceptance criteria; `false` otherwise.
@@ -324,11 +345,12 @@ The evaluation gate result is recorded in `evaluation.json` and `reports/evaluat
 > ```
 > Calling `--final-test` without `--force` intentionally crashes with `RuntimeError: PROTECTED TEST SET VIOLATION`.
 > 
-> **Rule for Member 2**: Automated pipelines and regression tests must **always** invoke:
+> **Rule for Member 2**: To validate a retrained saved candidate invoke:
 > ```powershell
-> python -m src.models.evaluate --dry-run
+> python -m src.models.evaluate --candidate-manifest "models/candidates/<candidate-id>/manifest.json"
 > ```
-> which evaluates strictly on Fold 3 within the 80% Train/Dev partition without touching the held-out test set.
+> This checks the exact frozen candidate on development Fold 3. CI uses deterministic synthetic tests;
+> never rerun the research or final-test benchmarks as a substitute for this artifact check.
 
 ---
 
@@ -366,8 +388,8 @@ Measured on the reference Windows host (Python 3.11):
 | **HRRR Extraction** | `python scripts/hrrr_extract.py --merge` | 1–2 s | Merging pre-extracted parts (full extraction: 2–4 h; use Colab/Drive) |
 | **Feast Feature Build** | `python -m src.features.build_feature_table` | 15–20 s | Generates 23,532 daylight issue hours for Set B |
 | **Feast Materialization** | `python feature_store/materialize.py` | 2–5 s | Materializes 2-week window into SQLite online store |
-| **Model Training & Gating** | `python -m src.models.train` | 25–35 s | 3-fold CV tuning, Set A vs B benchmark, refit champion, save bundle |
-| **Evaluation Dry-Run** | `python -m src.models.evaluate --dry-run` | 20–30 s | Full evaluation on Fold 3 within Train/Dev |
+| **Model Training & Gating** | `python -m src.models.train` | Not remeasured | 3-fold CV, freeze before Fold 3, save isolated candidate and exact-model gate |
+| **Saved Candidate Check** | `python -m src.models.evaluate --candidate-manifest <path>` | Not measured | Hash/chronology check and saved-bundle predictions; no fit |
 | **Deviation Calibration** | `python -m src.models.deviation --log-mlflow` | 10–15 s | Calibrates P1/P99 thresholds, benchmarks fault injection |
 | **Pytest CI Suite** | `pytest -m "not network"` | ~56 s | 61 unit tests pass, 1 skipped cleanly |
 | **Feast Test Suite** | `.venv-feast: pytest tests/test_feature_store.py` | ~33 s | 9 unit tests pass in dedicated Feast environment |
@@ -417,9 +439,9 @@ To reproduce the entire pipeline from scratch on a clean machine:
   .\.venv\Scripts\ruff check .
   ```
   *(Expect: All checks passed).*
-- [ ] **8. Run evaluation dry-run benchmark**:
+- [ ] **8. Verify the new candidate's manifest** (use the actual ID printed by training):
   ```powershell
-  .\.venv\Scripts\python -m src.models.evaluate --dry-run
+  .\.venv\Scripts\python -m src.models.evaluate --candidate-manifest "models/candidates/<candidate-id>/manifest.json"
   ```
   *(Expect: Fold 3 Daylight MAE 31.76 kWh for HGB Set B, exit code 0).*
 

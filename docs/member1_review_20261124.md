@@ -2,6 +2,16 @@
 
 ## Decision
 
+**Update, 26 November 2026, step 3:** R2's training overwrite, exact-artifact evaluation and rejected-success
+issues are fixed on `m1/candidate-artifacts`. Unique candidates carry hash-bound saved-model validation;
+approved/historical files are preserved for either gate outcome. Failed candidates exit 2 and are not
+registered; registration errors propagate. `evaluate --candidate-manifest` loads saved weights without
+refitting. Future candidate fits stop before development Fold 3, with a label-availability purge. These are
+development checks, not renewed final-test claims. No deployment/promotion implementation is included:
+passing candidates remain unapproved. Added 17 regression cases; full non-network suite **144 passed,
+1 skipped, 1 deselected**, scoped Ruff passed in the Python 3.12 review runtime. R4/R5 and the remaining
+runbook/environment findings are still open. Original source locations below describe the pre-fix review.
+
 **Update, 26 November 2026, step 2:** Integrated main `5ac8ed0` on `m1/quality-gate`. Fixed R2's numerical
 validation sub-issue in `evaluate_candidate_gate`: invalid/missing metrics, zero baseline and empty/malformed
 prediction evidence can no longer pass. Invalid policy settings fail explicitly; invalid result values use JSON
