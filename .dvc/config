@@ -1,0 +1,5 @@
+[core]
+    remote = team
+['remote "team"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/AwanTech095/SolarCast.s3

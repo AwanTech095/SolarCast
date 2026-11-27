@@ -18,7 +18,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | ID | Item | Status | Notes |
 |---|---|---|---|
 | M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
-| M2.2 | DVC snapshot | Local restore verified | Fresh checkout restored 28 files from a local DVC remote and matched all 31 receipt hashes. Shared DagsHub storage needs the team endpoint and authenticated access. |
+| M2.2 | DVC snapshot | Local restore verified | Fresh checkout restored 28 files from a local DVC remote and matched all 31 receipt hashes. Team DagsHub endpoint is configured. Upload and shared restore await authentication. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -141,7 +141,7 @@ foreach ($entry in $receipt.verified_files) {
 }
 ```
 
-The next Member 2 step is configuring DVC storage and testing a clean restore.
+The next Member 2 step is uploading the DVC snapshot and testing a clean restore from shared storage.
 
 ### Member 2 DVC snapshot
 
@@ -157,9 +157,16 @@ $env:DVC_SITE_CACHE_DIR = Join-Path (Get-Location) 'tmp/dvc_site_cache'
 py -3.12 scripts/verify_snapshot.py
 ```
 
-For team storage, use the DVC endpoint shown under Remote → Data → DVC in your
-DagsHub repository. The S3 remote uses the endpoint shown there and credentials
-set locally. See the [DagsHub configuration instructions](https://dagshub.com/docs/feature_guide/dagshub_storage/).
+The default DVC remote `team` uses the SolarCast DagsHub S3 endpoint. Create a DagsHub
+access token for an account with access to the project. Run the helper below in an
+interactive terminal. It saves the token in Git-ignored `.dvc/config.local`.
+In a fresh clone, run the helper again with that user's credentials.
+
+```powershell
+.\.venv-dvc\Scripts\python scripts/configure_dagshub_dvc.py
+```
+
+See the [DagsHub configuration instructions](https://dagshub.com/docs/feature_guide/dagshub_storage/).
 Once the shared remote is configured, use the explicit pointers below. Run the upload
 from the snapshot branch and run the download and verifier in a fresh checkout with
 its own empty cache. Set `$dvc` to the absolute path of the isolated DVC executable.
@@ -701,6 +708,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 2 follow-up: Configured the SolarCast DagsHub endpoint and added a hidden-input credential helper. DVC reported missing credentials. The shared upload and clean restore remain pending.
 
 - Member 2 step 2: Pinned isolated DVC tooling, added snapshot pointers and a SHA-256 verifier. Tested local push and empty-cache pull in a fresh Git clone. Shared remote verification awaits the team endpoint and access.
 
