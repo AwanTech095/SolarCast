@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** 2026-11-27 (HRRR replay documentation, step 9). Update this file after every task (see AGENTS.md).
+**Last updated:** Member 2 step 1, shared integration branch. Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -16,6 +16,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 
 ## 2. Status board
 | ID | Item | Status | Notes |
+| M2.1 | Shared integration starting point | Ready | Branch `m2/integration` contains the reviewed repairs through `4d5e15d`. The supplied artifact packet matches all 31 receipt hashes. |
 |---|---|---|---|
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
@@ -123,6 +124,23 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Member 2 integration starting point
+
+Fetch the shared `m2/integration` branch from GitHub. The branch builds on main
+`5ac8ed0` and carries the reviewed Member 1 repairs through `4d5e15d`.
+Use the verified team artifact packet for the local data and model inputs.
+From the repository root, check the restored files against the receipt:
+
+```powershell
+$receipt = Get-Content reports/packet_receipt_20261126.json -Raw | ConvertFrom-Json
+foreach ($entry in $receipt.verified_files) {
+    $hash = (Get-FileHash -LiteralPath $entry.path -Algorithm SHA256 -ErrorAction Stop).Hash
+    if ($hash.ToLowerInvariant() -ne $entry.sha256) { throw "Hash mismatch: $($entry.path)" }
+}
+```
+
+The next Member 2 step is configuring DVC storage and testing a clean restore.
 
 Use the packet HRRR Parquet as input for historical replay. Compare initialization, modeled availability and issue time in UTC. An operational feed would require actual arrival times for the fields used. See the README and the Member 2 weather extraction section.
 
@@ -606,6 +624,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| Member 2 step 1 | Use `m2/integration` as the shared starting point | Teammates can review and use one branch containing the tested Member 1 fixes. |
 | 2026-11-27 | Describe HRRR weather eligibility as simulated in replay | Archive retrieval supports feature extraction. Release evidence and delay sensitivity remain unresolved. |
 | 2026-11-27 | Freeze future candidate clear-sky scale on the earliest eligible development prefix | Every expanding fold uses the same training-only configuration, also available at serving. |
 | 2026-11-27 | Validate raw meter fields before timezone conversion | Keep malformed samples out of aggregation and retain raw power text for audit. |
@@ -645,6 +664,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 1: Prepared `m2/integration` from the reviewed commits and checked all 31 restored artifact hashes against the receipt. Confirmed the GitHub main base is `5ac8ed0`.
 
 - 2026-11-27 (step 9): Aligned current docs with the implemented HRRR route and its simulated availability. Checked 22,570 populated timing rows out of 23,532 in the supplied weather Parquet against the two-hour replay rule and exact target start. Focused suite 32 passed, 1 network test deselected. Ruff passed with local tools excluded. Original field publication times remain unverified.
 
