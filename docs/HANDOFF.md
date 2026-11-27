@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** Member 2 step 3, GitHub Actions CI. Update this file after every task (see AGENTS.md).
+**Last updated:** Member 2 step 4, shared MLflow tracking. Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -20,6 +20,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
 | M2.2 | DVC snapshot | Done | Uploaded 30 objects to the team DagsHub remote. An empty-cache checkout restored 28 payload files and matched all 31 receipt hashes. |
 | M2.3 | GitHub Actions CI | Done | Hosted lint, fixture tests, DagsHub restore, checksum verification and model contract tests passed on Python 3.11 in run `45988516079`. |
+| M2.4 | Shared MLflow tracking | Done | DagsHub run `cf85d30ae5ce4de3913ce7fd36c7e033` round-tripped its metrics, provenance and six evidence files. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -126,6 +127,34 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Member 2 shared MLflow
+
+Set `MLFLOW_TRACKING_URI=https://dagshub.com/AwanTech095/SolarCast.mlflow` in the
+job environment. Inject `MLFLOW_TRACKING_USERNAME` and `MLFLOW_TRACKING_PASSWORD`
+from the runner's secret store using an account that can write to the project.
+For a manual terminal run, set these for the current session only. Keep the token
+out of source and Git, and clear the session variables after use.
+[DagsHub MLflow setup](https://dagshub.com/docs/integration_guide/mlflow_tracking/)
+
+```powershell
+$env:MLFLOW_TRACKING_URI = 'https://dagshub.com/AwanTech095/SolarCast.mlflow'
+# With the account and token already injected into the environment:
+python -m scripts.log_snapshot_mlflow
+```
+
+The command creates a historical verification run after checking the complete
+31-file receipt. It logs the verification checkout's Git revision, source model
+run ID, DVC pointer and data hashes, bundle hash and archived CV metrics. The model
+bytes are available through DVC. The command reads back the metrics and tags and
+downloads the six evidence files to verify the exact bytes.
+[Verified MLflow run](https://dagshub.com/AwanTech095/SolarCast.mlflow/#/experiments/0/runs/cf85d30ae5ce4de3913ce7fd36c7e033)
+
+Training already honors `MLFLOW_TRACKING_URI` and now records the hashes of any
+DVC pointers in the checkout. Pointer hashes describe the declared snapshot;
+the individual input hashes describe the bytes used by training. Pass the same
+tracking environment into the future orchestration job. Shared candidate training,
+model registration and promotion are outside this historical verification run.
 
 ### Member 2 GitHub Actions CI
 
@@ -706,6 +735,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| Member 2 step 4 | Use DagsHub MLflow for shared tracking and keep the historical bundle in DVC | The tracking run links evidence and model identity to the verified snapshot. |
 | Member 2 step 3 | Run fixture checks without artifact access, and validate the snapshot on named push branches | Pull requests can run without storage credentials. The restored model and data have a separate hosted check. |
 | Member 2 step 2 | Use the SolarCast DagsHub remote for the historical DVC snapshot | An authenticated fresh checkout restored the same bytes as the verified packet. |
 | Member 2 step 2 | Track the packet through three explicit DVC pointers | Separate the immutable raw, processed and model snapshots while keeping Git review limited to metadata. |
@@ -749,6 +779,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 4: Added DVC pointer lineage and the snapshot verification command. Recorded and verified shared MLflow run `cf85d30ae5ce4de3913ce7fd36c7e033` with six artifact round trips. Next is orchestration.
 
 - Member 2 step 3 completion: Verified authenticated DagsHub restore and both hosted jobs. Preserved the three historical JSON records' receipt bytes across platforms with explicit Git attributes.
 
