@@ -1,0 +1,4 @@
+-r requirements.txt
+# Pandera 0.20 imports overload from multimethod's 1.x API.
+multimethod==1.10
+jsonschema==4.26.0

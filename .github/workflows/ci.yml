@@ -1,0 +1,73 @@
+name: SolarCast CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - m2/integration
+      - m2/ci
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Lint and fixture tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-ci.txt
+      - run: python -m pip install -r requirements-ci.txt
+      - run: python -m ruff check .
+      - run: python -m pytest -m "not network and not artifact" -q
+
+  snapshot:
+    name: DVC restore and model contract
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DVC_NO_ANALYTICS: 'true'
+      AWS_EC2_METADATA_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-ci.txt
+            requirements-dvc.txt
+      - name: Install isolated DVC and model tools
+        run: |
+          python -m venv .venv-dvc
+          .venv-dvc/bin/python -m pip install -r requirements-dvc.txt
+          python -m pip install -r requirements-ci.txt
+      - name: Restore verified snapshot from DagsHub
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DAGSHUB_DVC_TOKEN }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DAGSHUB_DVC_TOKEN }}
+          DVC_SITE_CACHE_DIR: ${{ runner.temp }}/dvc-site
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "::error::Set the repository Actions secret DAGSHUB_DVC_TOKEN."
+            exit 1
+          fi
+          .venv-dvc/bin/dvc pull -r team \
+            data/raw.dvc data/processed.dvc models/solarcast_f1_bundle.joblib.dvc
+          python scripts/verify_snapshot.py
+      - name: Verify saved model predictions and imported data
+        run: python -m pytest -m "artifact and not network" -q

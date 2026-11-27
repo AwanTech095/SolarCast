@@ -17,6 +17,7 @@ import pytest
 from src.models.bundle import ModelBundle, load_bundle
 
 DEFAULT_BUNDLE_PATH = Path("models/solarcast_f1_bundle.joblib")
+pytestmark = pytest.mark.artifact
 REQUESTS_SAMPLE_PATH = Path("docs/samples/predict_requests.json")
 RESPONSES_SAMPLE_PATH = Path("docs/samples/predict_responses.json")
 FEATURES_FIXTURE_PATH = Path("tests/fixtures/features_sample.csv")

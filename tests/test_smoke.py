@@ -25,8 +25,6 @@ class TestMember1Scaffold(unittest.TestCase):
         """Verify that expected Member 1 directories exist."""
         expected_dirs = [
             _REPO_ROOT / "configs",
-            _REPO_ROOT / "data" / "raw",
-            _REPO_ROOT / "data" / "processed",
             _REPO_ROOT / "src" / "data",
             _REPO_ROOT / "src" / "features",
             _REPO_ROOT / "src" / "models",

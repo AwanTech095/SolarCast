@@ -390,6 +390,7 @@ class TestQuarterHourlyDataset:
         assert qh_df.iloc[2]["quality_flag"] == "MISSING_DATA"
         assert np.isnan(qh_df.iloc[2]["power_kw"])
 
+    @pytest.mark.artifact
     def test_quarter_hourly_parquet_on_disk(self) -> None:
         """Verify the generated quarter_hourly.parquet file on disk."""
         qh_path = "data/processed/quarter_hourly.parquet"
@@ -409,6 +410,7 @@ class TestQuarterHourlyDataset:
         assert flags["SUSPECT_ZERO"] == 1792  # Exactly 448 hours * 4
         assert flags["MISSING_DATA"] == 323
 
+    @pytest.mark.artifact
     def test_hourly_kwh_equals_sum_of_quarter_hourly_kw(self) -> None:
         """Verify that hourly kWh equals sum(15-min kW * 0.25) for complete hours."""
         qh_path = "data/processed/quarter_hourly.parquet"

@@ -20,6 +20,7 @@ import pytest
 from src.features.preprocessing import build_features, get_feature_names
 
 SCHEMA_PATH = Path("configs/feature_schema.json")
+pytestmark = pytest.mark.artifact
 HOURLY_PATH = Path("data/processed/hourly.parquet")
 QH_PATH = Path("data/processed/quarter_hourly.parquet")
 WEATHER_PATH = Path("data/processed/hrrr_forecast_features.parquet")

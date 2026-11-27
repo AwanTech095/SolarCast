@@ -31,4 +31,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "network: marks tests that require live external network access",
+    "artifact: marks tests that require the DVC snapshot",
 ]

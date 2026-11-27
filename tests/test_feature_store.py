@@ -25,6 +25,7 @@ import pytest
 
 # Skip this entire test module if Feast is not installed (e.g. running in .venv)
 pytest.importorskip("feast")
+pytestmark = pytest.mark.artifact
 
 from feature_store.materialize import materialize_features  # noqa: E402
 from src.features.feast_provider import (  # noqa: E402
