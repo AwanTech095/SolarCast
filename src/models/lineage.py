@@ -100,6 +100,15 @@ def get_lineage_tags(repo_dir: Path | str | None = None) -> dict[str, str]:
         "git_dirty": "true" if git_dirty else "false",
         "python_version": sys.version.split()[0],
     }
+    # These describe the declared DVC snapshot. Data hashes below describe local bytes.
+    for name, pointer in {
+        "raw": "data/raw.dvc",
+        "processed": "data/processed.dvc",
+        "model": "models/solarcast_f1_bundle.joblib.dvc",
+    }.items():
+        digest = compute_file_sha256(root / pointer)
+        if digest:
+            tags[f"dvc_pointer_{name}_sha256"] = digest
 
     # MLflow version (if available in runtime)
     mlflow_mod = sys.modules.get("mlflow")

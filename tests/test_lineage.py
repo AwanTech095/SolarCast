@@ -17,6 +17,16 @@ from src.models.lineage import (
 )
 
 
+def test_declared_dvc_snapshot_has_pointer_identity(tmp_path: Path) -> None:
+    """Tag the actual DVC pointer bytes without requiring the restored dataset."""
+    pointer = tmp_path / "data/processed.dvc"
+    pointer.parent.mkdir()
+    pointer.write_bytes(b"outs: []\n")
+    tags = get_lineage_tags(tmp_path)
+    assert tags["dvc_pointer_processed_sha256"] == hashlib.sha256(pointer.read_bytes()).hexdigest()
+    assert "data_hash_hourly" not in tags
+
+
 def test_compute_file_sha256(tmp_path: Path) -> None:
     """Test SHA-256 calculation for existing and nonexistent files."""
     test_file = tmp_path / "sample.txt"

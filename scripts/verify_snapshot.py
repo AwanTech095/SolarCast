@@ -6,11 +6,8 @@ import json
 from pathlib import Path
 
 
-def main() -> None:
-    """Verify the artifact snapshot at the specified checkout root."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    root = parser.parse_args().root
+def verify_snapshot(root: Path) -> int:
+    """Verify every receipt entry and return the number of checked files."""
     receipt = root / "reports/packet_receipt_20261126.json"
     entries = json.loads(receipt.read_text(encoding="utf-8"))["verified_files"]
     if not entries:
@@ -23,7 +20,15 @@ def main() -> None:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         if digest != entry["sha256"]:
             raise SystemExit(f"SHA-256 mismatch: {entry['path']}")
-    print(f"Verified {len(entries)} files against the artifact receipt.")
+    return len(entries)
+
+
+def main() -> None:
+    """Verify the artifact snapshot at the specified checkout root."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    count = verify_snapshot(parser.parse_args().root)
+    print(f"Verified {count} files against the artifact receipt.")
 
 
 if __name__ == "__main__":
