@@ -19,7 +19,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 |---|---|---|---|
 | M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
 | M2.2 | DVC snapshot | Done | Uploaded 30 objects to the team DagsHub remote. An empty-cache checkout restored 28 payload files and matched all 31 receipt hashes. |
-| M2.3 | GitHub Actions CI | Core job verified | Hosted lint and fixture tests passed on Python 3.11. Hosted DVC restore awaits the repository Actions secret. Local snapshot tests passed. |
+| M2.3 | GitHub Actions CI | Done | Hosted lint, fixture tests, DagsHub restore, checksum verification and model contract tests passed on Python 3.11 in run `45988516079`. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -154,7 +154,12 @@ python -m pytest -m "artifact and not network" -q
 The artifact-free clone passed 202 local tests and the artifact suite passed
 16 local tests. Feast was skipped in both. The initial hosted run
 `45985601259` passed lint and fixture tests on Ubuntu with Python 3.11. Its
-snapshot job reported that `DAGSHUB_DVC_TOKEN` was missing.
+snapshot job reported that `DAGSHUB_DVC_TOKEN` was missing. After the token was
+configured, DagsHub restored the data successfully. The next check exposed a
+checksum discrepancy caused by Git's line-ending conversion. The three Git-tracked
+receipt records now have explicit CRLF checkout rules in `.gitattributes`.
+Both jobs passed on commit `6dcc1b9`.
+[GitHub Actions run](https://github.com/AwanTech095/SolarCast/actions/runs/45988516079)
 
 ### Member 2 integration starting point
 
@@ -744,6 +749,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 3 completion: Verified authenticated DagsHub restore and both hosted jobs. Preserved the three historical JSON records' receipt bytes across platforms with explicit Git attributes.
 
 - Member 2 step 3: Added GitHub Actions lint, fixture checks, and a separate DagsHub restore and model contract job. Verified the hosted core run and both local test selections. Hosted restore requires the repository Actions secret.
 
