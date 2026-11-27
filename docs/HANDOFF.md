@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** Member 2 step 2, DVC snapshot. Update this file after every task (see AGENTS.md).
+**Last updated:** Member 2 step 3, GitHub Actions CI. Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -19,6 +19,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 |---|---|---|---|
 | M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
 | M2.2 | DVC snapshot | Done | Uploaded 30 objects to the team DagsHub remote. An empty-cache checkout restored 28 payload files and matched all 31 receipt hashes. |
+| M2.3 | GitHub Actions CI | Core job verified | Hosted lint and fixture tests passed on Python 3.11. Hosted DVC restore awaits the repository Actions secret. Local snapshot tests passed. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -125,6 +126,35 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Member 2 GitHub Actions CI
+
+`.github/workflows/ci.yml` runs Ruff and the artifact-free suite on pull requests
+and pushes to the listed integration branches. The separate snapshot job runs
+on pushes to those branches, restores all three explicit DVC targets, verifies
+all 31 checksums, and runs the saved-model prediction and imported-data tests.
+It uses its own DVC environment and gives the DagsHub credential to the restore
+step only. The workflow does not run model training or final-test evaluation.
+
+In GitHub repository Settings → Secrets and variables → Actions, add the
+`DAGSHUB_DVC_TOKEN` repository secret with a token that can read the team
+DagsHub project. Then re-run the failed job from the Actions run page. On pull
+requests, the snapshot job is skipped by design. Real Feast integration uses
+the separate Feast environment and is outside these two jobs.
+
+In an existing model environment on Windows, run the same test selections:
+
+```powershell
+python -m pip install -r requirements-ci.txt
+python -m pytest -m "not network and not artifact" -q
+python scripts/verify_snapshot.py
+python -m pytest -m "artifact and not network" -q
+```
+
+The artifact-free clone passed 202 local tests and the artifact suite passed
+16 local tests. Feast was skipped in both. The initial hosted run
+`45985601259` passed lint and fixture tests on Ubuntu with Python 3.11. Its
+snapshot job reported that `DAGSHUB_DVC_TOKEN` was missing.
 
 ### Member 2 integration starting point
 
@@ -671,6 +701,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| Member 2 step 3 | Run fixture checks without artifact access, and validate the snapshot on named push branches | Pull requests can run without storage credentials. The restored model and data have a separate hosted check. |
 | Member 2 step 2 | Use the SolarCast DagsHub remote for the historical DVC snapshot | An authenticated fresh checkout restored the same bytes as the verified packet. |
 | Member 2 step 2 | Track the packet through three explicit DVC pointers | Separate the immutable raw, processed and model snapshots while keeping Git review limited to metadata. |
 | Member 2 step 1 | Use `m2/integration` as the shared starting point | Teammates can review and use one branch containing the tested Member 1 fixes. |
@@ -713,6 +744,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 3: Added GitHub Actions lint, fixture checks, and a separate DagsHub restore and model contract job. Verified the hosted core run and both local test selections. Hosted restore requires the repository Actions secret.
 
 - Member 2 step 2 completion: Uploaded the DVC snapshot to DagsHub and verified an empty-cache restore against the 31-entry SHA-256 receipt.
 
