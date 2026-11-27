@@ -7,6 +7,7 @@ on:
       - main
       - m2/integration
       - m2/ci
+      - m2/orchestration
 
 permissions:
   contents: read
@@ -71,3 +72,24 @@ jobs:
           python scripts/verify_snapshot.py
       - name: Verify saved model predictions and imported data
         run: python -m pytest -m "artifact and not network" -q
+
+  orchestration:
+    name: Compile Kubeflow graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-orchestration.txt
+      - run: python -m pip install -r requirements-orchestration.txt
+      - name: Compile with a test-only image reference
+        run: |
+          printf -v digest '%064d' 0
+          python -m orchestration.pipeline \
+            --image "example.invalid/solarcast@sha256:$digest" \
+            --output "$RUNNER_TEMP/solarcast-candidate.yaml"

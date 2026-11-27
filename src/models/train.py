@@ -181,6 +181,7 @@ def run_training_pipeline(
     reports_dir: Path | str = DEFAULT_REPORTS_DIR,
     models_dir: Path | str = DEFAULT_MODELS_DIR,
     tracking_uri: str | None = None,
+    register_candidate: bool = True,
 ) -> dict[str, Any]:
     """Execute complete training, tuning, benchmarking, and MLflow logging pipeline."""
     start_time = time.time()
@@ -621,7 +622,7 @@ def run_training_pipeline(
                 )
                 # Register eligible experiments only; no champion alias or serving file changes.
                 # Failures must propagate so automation cannot report a successful registration.
-                if gate_eval["eligible"]:
+                if gate_eval["eligible"] and register_candidate:
                     mlflow.sklearn.log_model(
                         final_model,
                         artifact_path="model",

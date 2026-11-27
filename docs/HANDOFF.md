@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** Member 2 step 4, shared MLflow tracking. Update this file after every task (see AGENTS.md).
+**Last updated:** Member 2 step 5, Airflow and Kubeflow orchestration. Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -21,6 +21,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | M2.2 | DVC snapshot | Done | Uploaded 30 objects to the team DagsHub remote. An empty-cache checkout restored 28 payload files and matched all 31 receipt hashes. |
 | M2.3 | GitHub Actions CI | Done | Hosted lint, fixture tests, DagsHub restore, checksum verification and model contract tests passed on Python 3.11 in run `45988516079`. |
 | M2.4 | Shared MLflow tracking | Done | DagsHub run `cf85d30ae5ce4de3913ce7fd36c7e033` round-tripped its metrics, provenance and six evidence files. |
+| M2.5 | Airflow to Kubeflow candidate workflow | Compiled and locally tested | Manual DAG, immutable image recipe, three connected KFP stages and typed gate evidence. Live deployment requires an Airflow worker and KFP namespace with artifact storage. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -127,6 +128,58 @@ report actual results and retain the eligible baseline/champion. Do not promise 
 | MLflow Lineage & Provenance Resolver | `src/models/lineage.py`, `docs/mlflow_lineage.md`, `scripts/resolve_run.py`, `reports/model_registry_status.json` | Built (Resolves runs or champion alias to code commit, dirty status, data/manifest hashes, schema version/hash, bundle hash; reports [OK]/[MISMATCH]/[NOT RECORDED]) |
 
 ## 6. How to run (fill in as built)
+
+### Member 2 Airflow → Kubeflow candidate workflow
+
+The manual Airflow 3 DAG `solarcast_candidate` validates the package and endpoint
+settings, submits a KFP v2 run, records the run ID in XCom and waits for completion.
+The pipeline restores the approved historical DVC snapshot and verifies its
+receipt, transfers only the three trainer input Parquets, builds features within
+training, and passes the exact saved candidate directory to the development gate.
+The gate exports a JSON artifact and a Boolean. False means policy rejection.
+An exception means a failed stage. KFP run success means the stages executed,
+so consumers must use the Boolean for eligibility. Candidate registration and
+promotion are deferred to the release workflow in step 6.
+
+From the repository root, with Docker running and a registry available:
+
+```powershell
+$revision = git rev-parse HEAD
+$image = "YOUR_REGISTRY/solarcast-worker:$revision"
+docker build -f docker/orchestration.Dockerfile --build-arg "SOURCE_REVISION=$revision" -t $image .
+docker push $image
+py -3.12 -m venv tmp/kfp_env
+.\tmp\kfp_env\Scripts\python -m pip install -r requirements-orchestration.txt
+# Use the registry's published digest in place of the placeholder.
+.\tmp\kfp_env\Scripts\python -m orchestration.pipeline --image 'YOUR_REGISTRY/solarcast-worker@sha256:YOUR_DIGEST' --output tmp/solarcast-candidate.yaml
+```
+
+The Dockerfile checks out the exact published Git revision so the worker can
+report it to MLflow. Configure the KFP backend's default pipeline artifact store
+and the worker image pull permissions. Create two secrets in the run namespace
+through the cluster's secret manager:
+
+| Secret | Keys | Scope |
+|---|---|---|
+| `solarcast-dvc` | `access-key-id`, `secret-access-key` | DagsHub DVC read access for the restore task |
+| `solarcast-mlflow` | `username`, `token` | DagsHub MLflow write access for the train task |
+
+Place `orchestration/dags/solarcast_candidate.py` in the Airflow 3 DAG folder.
+Install `requirements-orchestration.txt` in the Airflow deployment's runtime
+using the deployment's constraints. Mount the compiled YAML on the worker and
+set `SOLARCAST_KFP_HOST`, `SOLARCAST_KFP_NAMESPACE`, and
+`SOLARCAST_PIPELINE_PACKAGE` to the endpoint, namespace and mounted file path.
+Set `SOLARCAST_KFP_TOKEN` through the worker's secret store if its endpoint
+requires a bearer token. Trigger the DAG, open the recorded KFP run ID, and
+inspect the gate output and the candidate MLflow run. Links and platform setup
+are described in the [Kubeflow run guide](https://www.kubeflow.org/docs/components/pipelines/user-guides/core-functions/run-a-pipeline/)
+and [Airflow TaskFlow guide](https://airflow.apache.org/docs/apache-airflow/stable/tutorial_taskflow_api.html).
+
+Local verification compiled the graph with KFP 2.14.6 and checked the restore,
+train, and verify artifact dependencies and secret references. The fixture
+suite passed 208 tests with one skip and 17 deselections. Docker Desktop's Linux
+engine was unavailable and kubectl had no current context. A published image
+and an Airflow-to-KFP run remain deployment verification work.
 
 ### Member 2 shared MLflow
 
@@ -735,6 +788,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| Member 2 step 5 | Use a manual Airflow DAG and typed KFP gate output | Separate workflow completion from model eligibility while passing the saved candidate through isolated stages. |
 | Member 2 step 4 | Use DagsHub MLflow for shared tracking and keep the historical bundle in DVC | The tracking run links evidence and model identity to the verified snapshot. |
 | Member 2 step 3 | Run fixture checks without artifact access, and validate the snapshot on named push branches | Pull requests can run without storage credentials. The restored model and data have a separate hosted check. |
 | Member 2 step 2 | Use the SolarCast DagsHub remote for the historical DVC snapshot | An authenticated fresh checkout restored the same bytes as the verified packet. |
@@ -779,6 +833,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 5: Added the manual Airflow DAG, digest-pinned KFP graph and worker image definition. Added isolated restore, training and saved-candidate gate stages, plus fixture and CI compilation checks. Deployment and live-run verification require the target infrastructure.
 
 - Member 2 step 4: Added DVC pointer lineage and the snapshot verification command. Recorded and verified shared MLflow run `cf85d30ae5ce4de3913ce7fd36c7e033` with six artifact round trips. Next is orchestration.
 
