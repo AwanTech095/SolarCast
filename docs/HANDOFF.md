@@ -18,7 +18,7 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 | ID | Item | Status | Notes |
 |---|---|---|---|
 | M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
-| M2.2 | DVC snapshot | Local restore verified | Fresh checkout restored 28 files from a local DVC remote and matched all 31 receipt hashes. Team DagsHub endpoint is configured. Upload and shared restore await authentication. |
+| M2.2 | DVC snapshot | Done | Uploaded 30 objects to the team DagsHub remote. An empty-cache checkout restored 28 payload files and matched all 31 receipt hashes. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -141,7 +141,7 @@ foreach ($entry in $receipt.verified_files) {
 }
 ```
 
-The next Member 2 step is uploading the DVC snapshot and testing a clean restore from shared storage.
+The Member 2 DVC snapshot and clean restore are verified. The next step is CI.
 
 ### Member 2 DVC snapshot
 
@@ -167,7 +167,7 @@ In a fresh clone, run the helper again with that user's credentials.
 ```
 
 See the [DagsHub configuration instructions](https://dagshub.com/docs/feature_guide/dagshub_storage/).
-Once the shared remote is configured, use the explicit pointers below. Run the upload
+Use the explicit pointers below with the configured shared remote. Run the upload
 from the snapshot branch and run the download and verifier in a fresh checkout with
 its own empty cache. Set `$dvc` to the absolute path of the isolated DVC executable.
 
@@ -184,6 +184,10 @@ download fetched 30 DVC objects, including two directory manifests, and restored
 28 payload files. All 31 receipt entries matched, including the three Git records.
 The local checkout stayed clean after restore. Automatic target discovery missed
 the pointers during the Windows test, so use the explicit commands above.
+
+The authenticated DagsHub test also fetched all 30 objects into a fresh Git clone
+with an empty cache, restored all 28 payload files, and verified all 31 receipt
+entries. Git status was clean after the restore.
 
 Use the packet HRRR Parquet as input for historical replay. Compare initialization, modeled availability and issue time in UTC. An operational feed would require actual arrival times for the fields used. See the README and the Member 2 weather extraction section.
 
@@ -667,6 +671,7 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 
 ## 10. Decision log
 | Date | Decision | Why |
+| Member 2 step 2 | Use the SolarCast DagsHub remote for the historical DVC snapshot | An authenticated fresh checkout restored the same bytes as the verified packet. |
 | Member 2 step 2 | Track the packet through three explicit DVC pointers | Separate the immutable raw, processed and model snapshots while keeping Git review limited to metadata. |
 | Member 2 step 1 | Use `m2/integration` as the shared starting point | Teammates can review and use one branch containing the tested Member 1 fixes. |
 | 2026-11-27 | Describe HRRR weather eligibility as simulated in replay | Archive retrieval supports feature extraction. Release evidence and delay sensitivity remain unresolved. |
@@ -708,6 +713,8 @@ materialization, online query, skew/stale/null tests, feature repo commit in MLf
 | 2026-11-13 | Preferred route: PVDAQ via OEDI + NASA POWER (UTC) | Named in team plan; sources reviewed |
 
 ## 11. Changelog
+
+- Member 2 step 2 completion: Uploaded the DVC snapshot to DagsHub and verified an empty-cache restore against the 31-entry SHA-256 receipt.
 
 - Member 2 step 2 follow-up: Configured the SolarCast DagsHub endpoint and added a hidden-input credential helper. DVC reported missing credentials. The shared upload and clean restore remain pending.
 
