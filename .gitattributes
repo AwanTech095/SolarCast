@@ -1,0 +1,4 @@
+# The historical packet receipt hashes these exact CRLF working-tree bytes.
+/configs/data_manifest.json text eol=crlf
+/reports/evaluation.json text eol=crlf
+/reports/final_test_audit.json text eol=crlf
