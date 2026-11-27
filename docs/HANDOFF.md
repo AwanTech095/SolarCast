@@ -177,7 +177,13 @@ and [Airflow TaskFlow guide](https://airflow.apache.org/docs/apache-airflow/stab
 
 Local verification compiled the graph with KFP 2.14.6 and checked the restore,
 train, and verify artifact dependencies and secret references. The fixture
-suite passed 208 tests with one skip and 17 deselections. Docker Desktop's Linux
+suite passed 208 tests with one skip and 17 deselections. The restore stage
+also ran against the configured DagsHub remote with a warm cache, verified
+the receipt and exported all three inputs. Hosted lint/fixtures, KFP compilation
+and the clean DVC/model contract job all passed on `659d913`.
+[Hosted CI run](https://github.com/AwanTech095/SolarCast/actions/runs/46032468645)
+
+Docker Desktop's Linux
 engine was unavailable and kubectl had no current context. A published image
 and an Airflow-to-KFP run remain deployment verification work.
 
