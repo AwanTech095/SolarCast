@@ -14,6 +14,7 @@ __pycache__/
 # Python environments and generated caches
 .venv/
 .venv-feast/
+.venv-dvc/
 venv/
 env/
 feature_store/feature_repo/data/
@@ -29,6 +30,10 @@ htmlcov/
 # Local experiments and generated artifacts; use DVC/MLflow storage
 data/
 !src/data/
+!/data/
+/data/*
+!/data/raw.dvc
+!/data/processed.dvc
 mlruns/
 /mlruns/
 /mlartifacts/
@@ -36,7 +41,8 @@ mlruns/
 /mlflow.db-*
 /data/raw/
 /data/processed/
-/models/
+/models/*
+!/models/solarcast_f1_bundle.joblib.dvc
 /artifacts/
 /logs/
 logs/

@@ -1,0 +1,5 @@
+outs:
+- md5: 6a9a92779b6a8126bff5af3b4155e76d
+  size: 507490
+  hash: md5
+  path: solarcast_f1_bundle.joblib

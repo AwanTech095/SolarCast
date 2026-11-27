@@ -1,7 +1,7 @@
 # SolarCast: Member 1 Handoff (living document)
 
 **Owner:** Emad (Member 1: Data, features, Feast, models, MLflow). **Review partner:** Member 2.
-**Last updated:** Member 2 step 1, shared integration branch. Update this file after every task (see AGENTS.md).
+**Last updated:** Member 2 step 2, DVC snapshot. Update this file after every task (see AGENTS.md).
 Anyone picking up this package should be able to continue from this file alone.
 
 ## 1. What this project is
@@ -16,8 +16,9 @@ Known spec quirk: the example repo tree mentions FastAPI, but the endpoint secti
 
 ## 2. Status board
 | ID | Item | Status | Notes |
-| M2.1 | Shared integration starting point | Ready | Branch `m2/integration` contains the reviewed repairs through `4d5e15d`. The supplied artifact packet matches all 31 receipt hashes. |
 |---|---|---|---|
+| M2.1 | Shared integration starting point | Done | Branch `m2/integration` contains the reviewed repairs. |
+| M2.2 | DVC snapshot | In progress | Track the verified packet payload and test an empty-cache restore. Shared DagsHub storage needs the team repository endpoint and authenticated access. |
 | M1.review | Independent Member 2 integration acceptance | In progress | R1–R7 addressed. R8 weather availability assumptions and environment/service verification remain. |
 | M1.clearsky-scale | P95 provenance (R7) | Done (tests pass) | New candidates freeze a scale from the first development training prefix and persist its configuration and sample window. Historical holdout exposure is disclosed in the model card. |
 | M1.raw-validation | Raw meter quarantine (R6) | Done (tests pass) | Invalid values and timestamps quarantine before aggregation. Original power text is available as raw_power. Core suite 217 passed, 1 skipped, 1 deselected. |
@@ -141,6 +142,27 @@ foreach ($entry in $receipt.verified_files) {
 ```
 
 The next Member 2 step is configuring DVC storage and testing a clean restore.
+
+### Member 2 DVC snapshot
+
+Keep DVC in a separate environment. The snapshot covers `data/raw`, `data/processed`,
+and `models/solarcast_f1_bundle.joblib`. Git tracks their pointers and the small
+receipt, config and audit records. Treat these pointers as the historical packet
+snapshot. To version regenerated outputs, use a separate revision and receipt.
+
+```powershell
+py -3.12 -m venv .venv-dvc
+.\.venv-dvc\Scripts\python -m pip install -r requirements-dvc.txt
+$env:DVC_SITE_CACHE_DIR = Join-Path (Get-Location) 'tmp/dvc_site_cache'
+py -3.12 scripts/verify_snapshot.py
+```
+
+For team storage, use the DVC endpoint shown under Remote → Data → DVC in your
+DagsHub repository. The S3 remote uses the endpoint shown there and credentials
+set locally. See the [DagsHub configuration instructions](https://dagshub.com/docs/feature_guide/dagshub_storage/).
+Once the remote is configured, run `dvc push` from the snapshot branch, then
+`dvc pull` from a fresh checkout with its own empty cache and run the receipt
+verifier there. Use the DVC executable from the separate environment in each case.
 
 Use the packet HRRR Parquet as input for historical replay. Compare initialization, modeled availability and issue time in UTC. An operational feed would require actual arrival times for the fields used. See the README and the Member 2 weather extraction section.
 
