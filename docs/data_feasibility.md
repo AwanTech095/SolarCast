@@ -17,7 +17,7 @@
 |---|---|---|
 | **Spatial Grid Mapping** | 334 meters from plant coordinates to nearest HRRR grid point (chunk 1.4, tile offsets 48, 42) | **Verified** (PASS) |
 | **Field Semantics** | Instantaneous point forecasts; trapezoidal numerical averaging maps to hourly intervals | **Verified** (PASS) |
-| **Operational Release Latency** | Dissemination completes ~50–80 min post-cycle; 2-hour lag ensures availability before prediction issue time | **Assumed** (PASS) |
+| **Operational Release Latency** | Replay models availability as initialization plus two hours. Original delivery times for the required fields remain unverified. | **Assumed** (replay only) |
 | **Variable Inventory (Run 2022-06-13 12z)** | Chunk 1.4 verified non-empty for TCDC, LCDC, MCDC, HCDC, TMP, DPT, RH, UGRD, VGRD, VIS, PRATE, APCP | **Verified** (PASS) |
 | **HRRR Zarr Forecast Radiation** | **Omitted across all years** due to upstream `iris-grib #265` nighttime bug | **Verified** (FATAL BLOCKER) |
 | **Multi-Year Scan (2018-07-12 to 2023-11-09)** | 46,728 hourly runs scanned via HEAD requests; TMP available 94.18%, TCDC available 94.07% | **Verified** (PASS) |

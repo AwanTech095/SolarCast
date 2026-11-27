@@ -57,7 +57,9 @@ Validates raw 15-minute generation readings using Pandera schemas, isolates inva
 ---
 
 ### 2.3 Step 3: NOAA HRRR Forecast Weather Extraction (Heavy NWP Pipeline)
-Extracts 2-meter air temperature (`TMP`) and cloud cover (`TCDC`, `LCDC`, `MCDC`, `HCDC`) from the MesoWest NOAA HRRR Zarr archive (`s3://hrrrzarr/`) on AWS `us-west-1` for all daylight hours between 2018-07-12 and 2023-11-09.
+
+The replay field `weather_available_at_utc` equals run initialization plus an assumed two-hour delay. It represents modeled eligibility. Track the packet as historical replay data. An operational pipeline must capture actual required-field arrival times. The feature builder derives irradiance by adjusting pvlib clear-sky GHI with forecast TCDC.
+The supplied packet uses 2-meter air temperature (`TMP`) and total cloud cover (`TCDC`) from the MesoWest NOAA HRRR Zarr archive (`s3://hrrrzarr/`) on AWS `us-west-1` for all daylight hours between 2018-07-12 and 2023-11-09.
 
 ```powershell
 # Merge pre-extracted monthly parts into final dataset (Standard Fast Path for CI/CD)

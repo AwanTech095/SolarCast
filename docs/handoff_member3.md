@@ -91,8 +91,8 @@ def predict(
 | 21 | `latest_hour_missing` | `int64` | `flag` | Indicator flag: 1 if the latest fully available hour [H-2h, H-1h) was missing or invalid; 0 otherwise |
 | 22 | `prev_day_missing` | `int64` | `flag` | Indicator flag: 1 if same hour previous day [H-24h, H-23h) was missing or invalid; 0 otherwise |
 | 23 | `prev_week_missing` | `int64` | `flag` | Indicator flag: 1 if same hour previous week [H-168h, H-167h) was missing or invalid; 0 otherwise |
-| 24 | `tmp_c` | `float64` | `degC` | HRRR NWP 2-meter air temperature forecast averaged over leads F1 and F2 for target hour [H, H+1h) |
-| 25 | `tcdc_pct` | `float64` | `%` | HRRR NWP total cloud cover forecast percentage averaged over leads F1 and F2 for target hour [H, H+1h) |
+| 24 | `tmp_c` | `float64` | `degC` | HRRR NWP 2-meter air temperature forecast averaged over the leads valid at H and H+1h (nominal +2 and +3; later leads for older runs) for target hour [H, H+1h) |
+| 25 | `tcdc_pct` | `float64` | `%` | HRRR NWP total cloud cover forecast percentage averaged over the leads valid at H and H+1h (nominal +2 and +3; later leads for older runs) for target hour [H, H+1h) |
 | 26 | `clearsky_ghi_cloud_adj_wm2` | `float64` | `W/m^2` | Clear-sky GHI adjusted by forecast cloud cover via Kasten-Czeplak parameterization: clearsky_ghi_target_wm2 * (1 - 0.75 * (tcdc_pct/100)^3.4) |
 | 27 | `weather_run_age_hours` | `float64` | `hours` | Age of the HRRR NWP initialization run relative to issue time H (nominal 2 hours, higher if fallback) |
 | 28 | `weather_fallback_used` | `int64` | `flag` | Indicator flag: 1 if fallback to an earlier HRRR run (>2h age) was used; 0 if nominal 2h run used or weather missing |

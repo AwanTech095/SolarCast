@@ -14,7 +14,7 @@
 ## 2. Intended Use & Scope
 - **Primary Task**: Next-hour solar AC active energy forecast in kilowatt-hours (kWh) over the interval $[H, H+1\text{h})$ UTC.
 - **Plant / Site**: PVDAQ Site 2107 (Farm Solar Array, Arbuckle, CA; Nameplate DC Capacity: 893 kW, Nominal AC: 662.4 kW).
-- **Forecast Issue Timing**: Issued at hour $H$ UTC with an operational plant telemetry cutoff of $H - 15\text{ minutes}$ UTC and weather availability constraint of $\text{available\_at\_utc} \le H$ UTC (2-hour nominal latency).
+- **Forecast Issue Timing**: Issued at hour $H$ UTC with an operational plant telemetry cutoff of $H - 15\text{ minutes}$ UTC and weather availability constraint of $\text{available\_at\_utc} \le H$ UTC (assumed two-hour replay delay).
 - **Out of Scope**:
   - Intra-hour (e.g., 5-minute or 15-minute) dispatch forecasting.
   - Multi-day or day-ahead forecasting.
@@ -128,7 +128,7 @@ The model uses **Feature Set B** (29 features), defined in `configs/feature_sche
    - In broken, mixed-cloud conditions (20% to 80% forecast cloud cover, 12.4% of validation daylight hours), Feature Set B is **9.70% worse** than Feature Set A on validation (54.26 kWh vs 49.46 kWh) and **3.21% worse** on test (58.16 vs 56.35 kWh).
    - *Hypothesis*: timing errors of forecast cloud on broken cloud; not tested. In broken cloud regimes, numerical weather predictions may experience spatial/temporal phase timing errors relative to a compact PV site, whereas recent 15-minute generation telemetry reflects immediate ground conditions.
 2. **Operational Latency & Missing Weather**:
-   - The model relies on NOAA HRRR forecasts available with a 2-hour operational latency ($\text{init} \le H - 2\text{h}$).
+   - Historical replay selects NOAA HRRR forecasts under an assumed two-hour delay ($\text{init} \le H - 2\text{h}$).
    - Missing runs occur in 4.09% of validation daylight hours in the public archive (cause unknown; observed only as missing files/chunks in the archive). When weather is unobtainable, the model routes missing values via native NaN handling.
 3. **Single Site Calibration**:
    - Trained exclusively on PVDAQ Site 2107 in Arbuckle, CA (Sacramento Valley). Direct transfer to coastal marine layer or high-elevation microclimates requires site-specific recalibration.

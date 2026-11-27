@@ -2,17 +2,17 @@
 
 A three-member course project for building a reproducible, automated and monitored solar-energy forecasting system.
 
-**Status:** Scope revision and data-feasibility verification. Member 1 has added a Python scaffold, pinned dependencies and setup smoke tests, and has reported production-data findings on `m1/data-feasibility`. The underlying data files have not been independently validated in this workspace. The HRRR weather-forecast source proposed below is not yet approved. There is no working prediction pipeline or deployment yet.
+**Status:** Member 1 built and tested the local historical replay and forecasting pipeline for PVDAQ System 2107. The implementation uses archived HRRR temperature and cloud-cover forecasts with an assumed two-hour availability delay. Cloud deployment remains pending.
 
 ## Project objective
 
-Forecast the next hour of AC solar-energy production in **kWh** for one selected real solar plant, using **weather forecasts (including irradiance and temperature), time-of-day features and historical production**. Compare actual production with the forecast stored before that hour and flag substantial deviations.
+Forecast the next hour of AC solar-energy production in **kWh** at PVDAQ System 2107 using **forecast temperature, derived irradiance, time-of-day features and historical production**. Compare actual production with the forecast stored at issue time and flag substantial deviations.
 
 The prototype will demonstrate the complete MLOps lifecycle through **chronological historical replay and a cloud-hosted prediction API**. It does not currently have a live connection to the plant. In replay, the target hour must still be in the future relative to the replay clock.
 
 The project separates these uses of weather:
 
-- **Core next-hour forecast:** Use archived weather forecasts whose required fields were available before the energy prediction was issued, alongside available production history and calendar features. NOAA HRRR is the proposed forecast source, pending the verification gate below.
+- **Core next-hour forecast:** Use archived HRRR temperature and cloud-cover forecasts, cloud-adjusted pvlib clear-sky irradiance, production history and calendar features. Weather eligibility follows the replay policy below.
 - **Core deviation alert:** After the measured target-hour production becomes available, compare it with the previously stored energy forecast. Calibrate thresholds on earlier validation data. A deviation may reflect weather-forecast error, model error, bad measurements or plant behavior; it does not establish equipment failure.
 - **Supporting retrospective analysis:** Use NASA POWER observed-weather estimates for historical weather analysis and a separately evaluated weather-adjusted expected-output benchmark. This analysis is delayed and must not be presented as a forecast made before the target hour.
 
@@ -20,22 +20,23 @@ The project separates these uses of weather:
 
 ### Prediction example and information-availability rule
 
-At **14:00 UTC**, predict the plant's energy for **[14:00, 15:00) UTC**. Use an earlier weather-model run forecasting that interval, with the necessary fields already released by 14:00, and only plant readings available by 14:00. Store the predicted kWh and its lineage, then compare with actual kWh after the interval closes and measurements arrive.
+At **14:00 UTC**, predict the plant's energy for **[14:00, 15:00) UTC**. Use an earlier weather-model run forecasting that interval, with the necessary fields eligible by 14:00 under the replay policy, and only plant readings available by 14:00. Store the predicted kWh and its lineage, then compare with actual kWh after the interval closes and measurements arrive.
 
 ```text
-forecast_available_at_utc <= prediction_issue_time_utc
+weather_available_at_utc = weather_run_init_utc + 2 hours (replay assumption)
+weather_available_at_utc <= prediction_issue_time_utc
 weather forecast interval matches the target production interval
 production_feature_available_at_utc <= prediction_issue_time_utc
 ```
 
-The weather model's initialization time is not its release time. Do not assume a run initialized at 14:00 was available at 14:00. Use an older run or reject the case when availability cannot be justified. Also account for meter reporting delay before using the latest production interval.
+For the 14:00 example, the nominal 12:00 UTC run supplies forecast leads +2 and +3, valid at 14:00 and 15:00. The extractor averages the endpoint values for the hour. It can fall back to earlier eligible runs and flags missing weather when none can supply the inputs. The recorded availability time is simulated. Archive coverage establishes retrievability at the time of extraction. Original per-run release times and sensitivity to the assumed delay remain unverified. An operational feed would require recording when the required fields actually arrive and using them only when they arrive by the issue time.
 
 ## Data plan
 
 | Data | Proposed source | Purpose and status |
 | --- | --- | --- |
-| Measured production | PVDAQ/OEDI System 2107 | Candidate training target and actual-production record. Member 1 reports an Arbuckle, California plant, 893 kW DC, 15-minute AC power readings and roughly 2017-November 2023 coverage. These are preliminary findings requiring source-file verification. |
-| Forecast irradiance and temperature | NOAA HRRR archived forecasts | Proposed core weather inputs for next-hour energy forecasting. Exact variables, forecast runs, release timing, site extraction and overlapping dates must pass the verification checklist. |
+| Measured production | PVDAQ/OEDI System 2107 | Measured AC power at the Arbuckle, California site, aggregated from 15-minute kW readings to hourly kWh. 893 kW is the DC nameplate rating. |
+| Forecast temperature, cloud cover and derived irradiance | HRRR MesoWest Zarr and pvlib | Forecast TMP and TCDC supply temperature and cloud cover. Cloud cover adjusts pvlib clear-sky GHI to produce an irradiance proxy. Direct forecast DSWRF was unavailable on the selected Zarr route. |
 | Observed-weather estimates | NASA POWER | Supporting retrospective weather analysis and expected-output benchmark for the same site/dates. Not a source of future-known observed weather for the core forecast. |
 | Calendar and production history | Derived from validated timestamps and meter readings | Hour/season/solar-position features, lagged production and past-only rolling statistics. |
 
@@ -44,40 +45,9 @@ The weather model's initialization time is not its release time. Do not assume a
 - **Training-serving consistency:** Train and evaluate the core forecasting model with the same forecast-weather inputs and availability policy intended for serving. Do not train on target-hour NASA observations and silently substitute HRRR forecasts at inference.
 - **Versioning:** Track large datasets and generated artifacts with DVC, using a configured remote. Retain source metadata, checksums, extraction configuration and model-run identifiers. Log data, feature-definition and code versions with each MLflow experiment.
 
-**Data acceptance is pending:** A public archive's existence does not prove the required fields, dates and original release times are usable for this plant. Start with a bounded sample, not a full archive download.
+### HRRR feasibility and open checks
 
-### Special note for Member 1: verify HRRR before finalizing the dataset
-
-**Owner: Emad / Member 1 (Data and ML Engineering). Next action: investigate and report findings to the team before full training.** The production dataset remains a candidate; HRRR is a proposed addition, not an already verified integration. Preserve the existing research on `m1/data-feasibility`; bring this scope revision into that branch before continuing so its older NASA-only assumptions are reconciled.
-
-Start with **one consecutive week within the reported production period**, including valid daylight hours. Confirm that the following checks pass, then assess whether sufficient seasonal coverage can be retrieved affordably and consistently.
-
-- [ ] **Production channel and site:** Verify the selected channel is the intended plant-level AC power/energy measurement. Record exact coordinates, source identifiers, units, interval duration, timestamp convention and average-versus-instantaneous semantics. Do not treat the reported DC nameplate rating as verified AC capacity.
-- [ ] **Time alignment:** Inspect raw rows around daylight-saving transitions, duplicates and missing intervals; normalize to UTC. A local `01:45 -> 03:00` jump can represent one ordinary 15-minute elapsed interval at the spring transition. Establish whether each source labels interval start, center or end.
-- [ ] **HRRR archive access and overlap:** Retrieve actual forecast records covering the sample at the plant's location. Record exact bucket/object URLs, forecast-model version, run initialization, lead time and valid time. Archive-wide coverage is not proof that every needed file exists.
-- [ ] **Required weather fields:** Extract forecast irradiance/downward shortwave radiation and near-surface temperature. Record exact variable identifiers, levels, units and whether each value is instantaneous, interval-averaged or accumulated. Demonstrate how those values map to the hourly production target; do not assume radiation is an hourly average.
-- [ ] **Forecast release timing:** Establish when the required fields would have been available, not just when the model run was initialized. Cite delivery documentation and any usable contemporaneous records. A current archive object's modification date may reflect copying or reprocessing rather than original publication. If only a latency assumption can be supported, label the backtest as simulated availability, test its sensitivity and report the uncertainty; do not mark historical availability as verified.
-- [ ] **No hindsight in run selection:** For each prediction issue time, choose the latest eligible earlier run using availability alone. Do not select a later run, an analysis field or whichever forecast happens to match the actual weather best. Where availability is unresolved, exclude/flag that case rather than silently assume it.
-- [ ] **Spatial extraction and missingness:** Document nearest-grid-point/interpolation method, grid coordinates and distance from the plant. Check daytime radiation/temperature plausibility, unavailable files and join coverage. Report missingness by month and daylight period, not only a whole-dataset percentage.
-- [ ] **NASA's separate role:** Demonstrate matching observed-weather retrieval for the site/sample, with explicit UTC and verified units. Keep target-hour NASA observations outside core forecast features. Document any separate retrospective benchmark and its publication delay.
-- [ ] **Terms and reproducibility:** Record attribution/usage terms for the plant data and weather sources, retrieval steps, checksums and extraction dependencies. Store large files in DVC/artifact storage; commit reusable scripts, configuration and metadata rather than raw archives or credentials.
-- [ ] **Feasibility and decision:** Report sample download size/time, extraction effort, matched-hour count, usable historical overlap and remaining blockers. Expand checks across seasons before committing to the full training period. Recommend **GO**, **CONDITIONAL** or **NO-GO** with evidence. Do not claim completion of the weather-driven pipeline until this decision is reviewed.
-
-#### What Member 1 should send back
-
-Submit a short `docs/data_feasibility.md` report and a reproducible extraction/validation script through a pull request. Include a small joined preview or DVC-tracked sample with:
-
-```text
-site_id, prediction_issue_time_utc, target_start_utc, target_end_utc,
-weather_run_init_utc, weather_available_at_utc, availability_evidence_or_assumption,
-weather_valid_time_or_interval, forecast_irradiance_wm2, forecast_temperature_c,
-production_feature_cutoff_utc, production_feature_available_at_utc,
-actual_energy_kwh, actual_available_at_utc, quality_flags
-```
-
-`actual_energy_kwh` is a training/evaluation label; it must not enter forecast features before it becomes available. Preserve additional raw timing and units metadata where the simplified preview is insufficient.
-
-The report must identify each finding as **verified**, **assumed** or **unresolved**, and show the forecast-release/target-time alignment for a few real sample rows. If HRRR fails the gate, the team will reconsider the weather source or production dataset before implementation; it will not silently replace timely weather forecasts with two-week-old observations.
+Member 1 checked overlapping archive coverage and site extraction and implemented the TMP/TCDC route for replay. The feasibility report records the field inventory, coverage and route decision. Original field delivery times and replay sensitivity to other delays are still open. [HRRR feasibility report](docs/data_feasibility.md)
 
 ## Planned models and evaluation
 
@@ -168,7 +138,7 @@ Member 1 dependency installation and smoke-test commands are provided below. DVC
 
 ### First handoff for Member 1
 
-Complete the **Special note for Member 1** checklist above first. Report whether the candidate plant data and HRRR forecasts can support the same location, intervals and information-availability policy. Agree on the hourly schema and eligibility rules before large downloads or full model training. Then implement reusable ingestion/validation, baseline models and forecast-weather models with MLflow logging.
+See the Member 1 handoff for the implementation, validation evidence and integration work. [Member 1 handoff](docs/HANDOFF.md)
 
 GitHub stores the shared code and configuration. An MLflow tracking service and DVC data remote are separate services that the team still needs to configure; creating this repository does not create them.
 
